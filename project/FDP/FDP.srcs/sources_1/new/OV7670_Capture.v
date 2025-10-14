@@ -28,7 +28,7 @@ module OV7670_Capture(
     input avg_enable,           // 1 = 2x2 averaging, 0 = decimate
     input [7:0] d,
     output reg [17:0] addr,      // 0..76800-1 (320x240)
-    output reg [15:0] dout,      // RGB565 stored in BRAM
+    output reg [14:0] dout,      // Stored as 15-bit BGR555 in BRAM: {0, B[4:0], G[4:0], R[4:0]}
     output reg we                // 1-cycle write enable
 );
 
@@ -78,38 +78,38 @@ module OV7670_Capture(
     // Timing: Few adders (two 4-bit adds => 5 bits, then + up to 5 bits => 6 bits, then shifts).
     // ------------------------------------------------------------------
 
-    // Averaging support (RGB565 component sums)
+    // Averaging support (RGB555 component sums)
     reg [6:0] line_r [0:319];   // R pair sums from even row
-    reg [7:0] line_g [0:319];   // G pair sums from even row
+    reg [6:0] line_g [0:319];   // G pair sums from even row (5-bit G -> up to 62 per horiz sum)
     reg [6:0] line_b [0:319];
     reg [6:0] h_r = 7'd0;       // first pixel (even x) R component (extended)
-    reg [7:0] h_g = 8'd0;       // first pixel (even x) G component (extended)
+    reg [6:0] h_g = 7'd0;       // first pixel (even x) G component (extended)
     reg [6:0] h_b = 7'd0;       // first pixel (even x) B component (extended)
-    reg [4:0] px_r5;            // single pixel components (raw RGB565 fields)
-    reg [5:0] px_g6;
+    reg [4:0] px_r5;            // single pixel components (raw RGB555 fields)
+    reg [4:0] px_g5;
     reg [4:0] px_b5;
 
     // Combinational horizontal sums for second pixel of pair (valid when cam_x[0]==1)
-    wire [6:0] horiz_r = h_r + {2'b00, d_latch[15:11]};
-    wire [7:0] horiz_g = h_g + {1'b0, {d_latch[10:8], d_latch[7:5]}};
+    wire [6:0] horiz_r = h_r + {2'b00, d_latch[14:10]};
+    wire [6:0] horiz_g = h_g + {2'b00, d_latch[9:8], d_latch[7:5]};
     wire [6:0] horiz_b = h_b + {2'b00, d_latch[4:0]};
     // Vertical combine (valid on odd rows when cam_y[0]==1 and odd x)
     wire [6:0] vert_sum_r = line_r[cam_x[9:1]] + horiz_r;   // 0..124
-    wire [7:0] vert_sum_g = line_g[cam_x[9:1]] + horiz_g;   // 0..252
+    wire [6:0] vert_sum_g = line_g[cam_x[9:1]] + horiz_g;   // 0..124
     wire [6:0] vert_sum_b = line_b[cam_x[9:1]] + horiz_b;   // 0..124
     // Averaged (rounded) channel values (combinational)
     wire [6:0] avg_r_w = (vert_sum_r + 7'd2) >> 2; // still 7 bits, we take upper 5
-    wire [7:0] avg_g_w = (vert_sum_g + 8'd2) >> 2; // 8 bits -> take upper 6
+    wire [6:0] avg_g_w = (vert_sum_g + 7'd2) >> 2; // 7 bits -> take upper 5
     wire [6:0] avg_b_w = (vert_sum_b + 7'd2) >> 2; // 7 bits -> take upper 5
     // Moved from inside procedural block (Verilog 2001 requires declarations at module or block top prior to use)
     reg [6:0] cur_h_r; 
-    reg [7:0] cur_h_g; 
+    reg [6:0] cur_h_g; 
     reg [6:0] cur_h_b;
     reg [6:0] sum_r; 
-    reg [7:0] sum_g; 
+    reg [6:0] sum_g; 
     reg [6:0] sum_b;
 
-    always @(negedge pclk) begin
+    always @(posedge pclk) begin
         if (vsync || ext_reset) begin
             cam_x <= 10'd0;
             cam_y <= 9'd0;
@@ -125,15 +125,16 @@ module OV7670_Capture(
             wr_hold <= { wr_hold[0], (href & ~wr_hold[0]) };  // pixel complete detection
             we <= 1'b0;
             if (pixel_complete && href) begin
-                // Extract RGB565 components
-                px_r5 <= d_latch[15:11];
-                px_g6 <= d_latch[10:5];
+                // Extract RGB555 components (bit15 is unused/0)
+                px_r5 <= d_latch[14:10];
+                px_g5 <= {d_latch[9:8], d_latch[7:5]};
                 px_b5 <= d_latch[4:0];
                 if (avg_enable) begin
                     if (~cam_x[0]) begin
                         // store first (even x) pixel components
-                        h_r <= {2'b00, d_latch[15:11]};
-                        h_g <= {1'b0, d_latch[10:5]};
+                        h_r <= {2'b00, d_latch[14:10]};
+                        // extend 5-bit G to 7-bit working width (zeros padded on top)
+                        h_g <= {2'b00, d_latch[9:8], d_latch[7:5]};
                         h_b <= {2'b00, d_latch[4:0]};
                     end else begin
                         // odd x: have second pixel -> build horizontal sum combinationally
@@ -145,14 +146,17 @@ module OV7670_Capture(
                         end else begin
                             // odd row: vertical combine now (no extra latency)
                             // Use precomputed averaged wires to avoid tool parsing issues
-                            dout <= { avg_b_w[4:0], avg_g_w[5:0], avg_r_w[4:0] };
+                            // Pack averaged BGR555 with MSB=0
+                            dout <= { avg_b_w[4:0], avg_g_w[4:0], avg_r_w[4:0] };
                             addr <= (cam_y[8:1]) * 18'd320 + cam_x[9:1];
                             we <= 1'b1;
                         end
                     end
                 end else begin
                     if (~cam_x[0] && ~cam_y[0]) begin
-                        dout <= {d_latch[4:0], d_latch[10:5], d_latch[15:11]};
+                        // From RGB555 input: R=d_latch[14:10], G={d_latch[9:8],d_latch[7:5]}, B=d_latch[4:0]
+                        // Store as BGR555 with MSB=0
+                        dout <= { d_latch[4:0], { d_latch[9:8], d_latch[7:5] }, d_latch[14:10] };
                         addr <= (cam_y[8:1]) * 18'd320 + cam_x[9:1];
                         we <= 1'b1;
                     end

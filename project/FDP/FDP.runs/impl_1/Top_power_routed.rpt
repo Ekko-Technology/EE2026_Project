@@ -1,7 +1,7 @@
 Copyright 1986-2018 Xilinx, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------
 | Tool Version     : Vivado v.2018.2 (lin64) Build 2258646 Thu Jun 14 20:02:38 MDT 2018
-| Date             : Fri Oct 10 00:42:36 2025
+| Date             : Wed Oct 15 00:23:15 2025
 | Host             : kc-ThinkPad-T14-Gen-5 running 64-bit Ubuntu 22.04.5 LTS
 | Command          : report_power -file Top_power_routed.rpt -pb Top_power_summary_routed.pb -rpx Top_power_routed.rpx
 | Design           : Top
@@ -30,14 +30,14 @@ Table of Contents
 ----------
 
 +--------------------------+--------------+
-| Total On-Chip Power (W)  | 0.182        |
+| Total On-Chip Power (W)  | 0.203        |
 | Design Power Budget (W)  | Unspecified* |
 | Power Budget Margin (W)  | NA           |
-| Dynamic (W)              | 0.108        |
+| Dynamic (W)              | 0.130        |
 | Device Static (W)        | 0.074        |
 | Effective TJA (C/W)      | 5.0          |
-| Max Ambient (C)          | 84.1         |
-| Junction Temperature (C) | 25.9         |
+| Max Ambient (C)          | 84.0         |
+| Junction Temperature (C) | 26.0         |
 | Confidence Level         | Low          |
 | Setting File             | ---          |
 | Simulation Activity File | ---          |
@@ -52,22 +52,22 @@ Table of Contents
 +--------------------------+-----------+----------+-----------+-----------------+
 | On-Chip                  | Power (W) | Used     | Available | Utilization (%) |
 +--------------------------+-----------+----------+-----------+-----------------+
-| Clocks                   |    <0.001 |        8 |       --- |             --- |
-| Slice Logic              |    <0.001 |      986 |       --- |             --- |
-|   LUT as Logic           |    <0.001 |      330 |     20800 |            1.59 |
-|   LUT as Distributed RAM |    <0.001 |      100 |      9600 |            1.04 |
+| Clocks                   |     0.001 |       10 |       --- |             --- |
+| Slice Logic              |    <0.001 |     1027 |       --- |             --- |
+|   LUT as Logic           |    <0.001 |      379 |     20800 |            1.82 |
+|   LUT as Distributed RAM |    <0.001 |       95 |      9600 |            0.99 |
 |   CARRY4                 |    <0.001 |       22 |      8150 |            0.27 |
-|   F7/F8 Muxes            |    <0.001 |       78 |     32600 |            0.24 |
-|   Register               |    <0.001 |      278 |     41600 |            0.67 |
+|   F7/F8 Muxes            |    <0.001 |       75 |     32600 |            0.23 |
+|   Register               |    <0.001 |      288 |     41600 |            0.69 |
 |   BUFG                   |    <0.001 |        1 |        32 |            3.13 |
-|   Others                 |     0.000 |      106 |       --- |             --- |
+|   Others                 |     0.000 |      105 |       --- |             --- |
 |   LUT as Shift Register  |     0.000 |        1 |      9600 |            0.01 |
-| Signals                  |     0.001 |      854 |       --- |             --- |
-| Block RAM                |     0.003 |     34.5 |        50 |           69.00 |
-| PLL                      |     0.098 |        1 |         5 |           20.00 |
-| I/O                      |     0.004 |       49 |       106 |           46.23 |
+| Signals                  |     0.001 |      903 |       --- |             --- |
+| Block RAM                |     0.003 |       34 |        50 |           68.00 |
+| PLL                      |     0.117 |        1 |         5 |           20.00 |
+| I/O                      |     0.006 |       50 |       106 |           47.17 |
 | Static Power             |     0.074 |          |           |                 |
-| Total                    |     0.182 |          |           |                 |
+| Total                    |     0.203 |          |           |                 |
 +--------------------------+-----------+----------+-----------+-----------------+
 
 
@@ -77,9 +77,9 @@ Table of Contents
 +-----------+-------------+-----------+-------------+------------+
 | Source    | Voltage (V) | Total (A) | Dynamic (A) | Static (A) |
 +-----------+-------------+-----------+-------------+------------+
-| Vccint    |       1.000 |     0.025 |       0.015 |      0.011 |
-| Vccaux    |       1.800 |     0.062 |       0.049 |      0.013 |
-| Vcco33    |       3.300 |     0.002 |       0.001 |      0.001 |
+| Vccint    |       1.000 |     0.027 |       0.016 |      0.011 |
+| Vccaux    |       1.800 |     0.072 |       0.060 |      0.013 |
+| Vcco33    |       3.300 |     0.003 |       0.002 |      0.001 |
 | Vcco25    |       2.500 |     0.000 |       0.000 |      0.000 |
 | Vcco18    |       1.800 |     0.000 |       0.000 |      0.000 |
 | Vcco15    |       1.500 |     0.000 |       0.000 |      0.000 |
@@ -136,8 +136,10 @@ Table of Contents
 | clk                       | clk                                      |            10.0 |
 | clk_out1_display_clocks   | disp_clocks/inst/clk_out1_display_clocks |            40.0 |
 | clk_out1_display_clocks_1 | disp_clocks/inst/clk_out1_display_clocks |            40.0 |
-| clkfbout_display_clocks   | disp_clocks/inst/clkfbout_display_clocks |            40.0 |
-| clkfbout_display_clocks_1 | disp_clocks/inst/clkfbout_display_clocks |            40.0 |
+| clk_out2_display_clocks   | disp_clocks/inst/clk_out2_display_clocks |            41.7 |
+| clk_out2_display_clocks_1 | disp_clocks/inst/clk_out2_display_clocks |            41.7 |
+| clkfbout_display_clocks   | disp_clocks/inst/clkfbout_display_clocks |            10.0 |
+| clkfbout_display_clocks_1 | disp_clocks/inst/clkfbout_display_clocks |            10.0 |
 | sys_clk_pin               | clk                                      |            10.0 |
 +---------------------------+------------------------------------------+-----------------+
 
@@ -151,9 +153,9 @@ Table of Contents
 +----------------------------------------------+-----------+
 | Name                                         | Power (W) |
 +----------------------------------------------+-----------+
-| Top                                          |     0.108 |
-|   disp_clocks                                |     0.098 |
-|     inst                                     |     0.098 |
+| Top                                          |     0.130 |
+|   disp_clocks                                |     0.118 |
+|     inst                                     |     0.118 |
 |   frame_buffer                               |     0.003 |
 |     U0                                       |     0.003 |
 |       inst_blk_mem_gen                       |     0.003 |
@@ -204,11 +206,7 @@ Table of Contents
 |               prim_init.ram                  |    <0.001 |
 |             ramloop[28].ram.r                |    <0.001 |
 |               prim_init.ram                  |    <0.001 |
-|             ramloop[29].ram.r                |    <0.001 |
-|               prim_init.ram                  |    <0.001 |
 |             ramloop[2].ram.r                 |    <0.001 |
-|               prim_init.ram                  |    <0.001 |
-|             ramloop[30].ram.r                |    <0.001 |
 |               prim_init.ram                  |    <0.001 |
 |             ramloop[3].ram.r                 |    <0.001 |
 |               prim_init.ram                  |    <0.001 |
@@ -221,6 +219,8 @@ Table of Contents
 |             ramloop[7].ram.r                 |    <0.001 |
 |               prim_init.ram                  |    <0.001 |
 |             ramloop[8].ram.r                 |    <0.001 |
+|               prim_init.ram                  |    <0.001 |
+|             ramloop[9].ram.r                 |    <0.001 |
 |               prim_init.ram                  |    <0.001 |
 |   ov7670                                     |    <0.001 |
 |     camera_regs                              |    <0.001 |
@@ -246,14 +246,12 @@ Table of Contents
 |     line_g_reg_0_255_3_3                     |    <0.001 |
 |     line_g_reg_0_255_4_4                     |    <0.001 |
 |     line_g_reg_0_255_5_5                     |    <0.001 |
-|     line_g_reg_0_255_6_6                     |    <0.001 |
 |     line_g_reg_0_63_0_0                      |    <0.001 |
 |     line_g_reg_0_63_0_0__0                   |    <0.001 |
 |     line_g_reg_0_63_0_0__1                   |    <0.001 |
 |     line_g_reg_0_63_0_0__2                   |    <0.001 |
 |     line_g_reg_0_63_0_0__3                   |    <0.001 |
 |     line_g_reg_0_63_0_0__4                   |    <0.001 |
-|     line_g_reg_0_63_0_0__5                   |    <0.001 |
 |     line_r_reg_0_255_0_0                     |    <0.001 |
 |     line_r_reg_0_255_1_1                     |    <0.001 |
 |     line_r_reg_0_255_2_2                     |    <0.001 |

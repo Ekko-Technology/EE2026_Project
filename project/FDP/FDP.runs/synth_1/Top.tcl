@@ -47,6 +47,9 @@ set_property used_in_implementation false [get_files -all /media/kc/Data/EE2026/
 set_property used_in_implementation false [get_files -all /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/display_clocks/display_clocks.xdc]
 set_property used_in_implementation false [get_files -all /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/display_clocks/display_clocks_ooc.xdc]
 
+read_ip -quiet /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/bitmap_mem/bitmap_mem.xci
+set_property used_in_implementation false [get_files -all /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/bitmap_mem/bitmap_mem_ooc.xdc]
+
 # Mark all dcp files as not used in implementation to prevent them from being
 # stitched into the results of this synthesis run. Any black boxes in the
 # design are intentionally left as such for best results. Dcp files will be

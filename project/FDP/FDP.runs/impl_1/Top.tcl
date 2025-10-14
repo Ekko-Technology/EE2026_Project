@@ -77,6 +77,7 @@ set rc [catch {
   add_files -quiet /media/kc/Data/EE2026/project/FDP/FDP.runs/synth_1/Top.dcp
   read_ip -quiet /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/image_mem/image_mem.xci
   read_ip -quiet /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/display_clocks/display_clocks.xci
+  read_ip -quiet /media/kc/Data/EE2026/project/FDP/FDP.srcs/sources_1/ip/bitmap_mem/bitmap_mem.xci
   read_xdc /media/kc/Data/EE2026/project/FDP/FDP.srcs/constrs_1/imports/Downloads/Basys3_Master.xdc
   link_design -top Top -part xc7a35tcpg236-1
   close_msg_db -file init_design.pb

@@ -38,7 +38,7 @@ module OV7670_Controller(
     // Normal operation: reset high, power-up enabled
     assign reset = 1'b1;
     assign pwdn  = 1'b0;
-    assign xclk  = clk; // input clock directly set to 25 MHz
+    assign xclk  = clk; // input clock directly set to 24 MHz
 
     // Instantiate register generator
     OV7670_Registers camera_regs(clk, resend, taken, command, finished);

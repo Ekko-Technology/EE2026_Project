@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<GenRun Id="synth_1" LaunchPart="xc7a35tcpg236-1" LaunchTime="1760028067">
+<GenRun Id="synth_1" LaunchPart="xc7a35tcpg236-1" LaunchTime="1760458903">
   <File Type="VDS-TIMING-PB" Name="Top_timing_summary_synth.pb"/>
   <File Type="VDS-TIMINGSUMMARY" Name="Top_timing_summary_synth.rpt"/>
   <File Type="RDS-DCP" Name="Top.dcp"/>
@@ -53,6 +53,14 @@
         <Attr Name="UsedIn" Val="simulation"/>
       </FileInfo>
     </File>
+    <File Path="$PSRCDIR/sources_1/new/Image_Buffer.v">
+      <FileInfo>
+        <Attr Name="UserDisabled" Val="1"/>
+        <Attr Name="UsedIn" Val="synthesis"/>
+        <Attr Name="UsedIn" Val="implementation"/>
+        <Attr Name="UsedIn" Val="simulation"/>
+      </FileInfo>
+    </File>
     <File Path="$PSRCDIR/sources_1/new/Address_Generator.v">
       <FileInfo>
         <Attr Name="UserDisabled" Val="1"/>
@@ -91,11 +99,10 @@
     </Config>
   </FileSet>
   <Strategy Version="1" Minor="2">
-    <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2018">
-      <Desc>Vivado Synthesis Defaults</Desc>
-    </StratHandle>
+    <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2018"/>
     <Step Id="synth_design"/>
   </Strategy>
+  <BlockFileSet Type="BlockSrcs" Name="bitmap_mem"/>
   <BlockFileSet Type="BlockSrcs" Name="display_clocks"/>
   <BlockFileSet Type="BlockSrcs" Name="image_mem"/>
 </GenRun>

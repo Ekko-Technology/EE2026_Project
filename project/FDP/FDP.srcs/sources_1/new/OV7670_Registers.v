@@ -33,7 +33,7 @@ module OV7670_Registers(
             8'h05: sreg <= 16'h3E00; // COM14  PCLK scaling off
             8'h06: sreg <= 16'h8C00; // RGB444 Set RGB format
             8'h07: sreg <= 16'h0400; // COM1   no CCIR601
-            8'h08: sreg <= 16'h40D0; // COM15  Full 0-255 output, RGB 565
+            8'h08: sreg <= 16'h40F0; // COM15  Full 0-255 output, RGB 555
             8'h09: sreg <= 16'h3A04; // TSLB   UV ordering
             8'h0A: sreg <= 16'h1438; // COM9   AGC ceiling
             8'h0B: sreg <= 16'h4F40; // MTX1   colour conversion matrix
