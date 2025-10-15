@@ -100,7 +100,7 @@ function [label_bits-1:0] label_curr_left(input [x_bitsize-1:0] x);
     if (y == 0 || x == 0) begin
         label_curr_left = 0; // first line or first pixel has no previous line or left pixel
     end else begin
-        label_curr_left = toggle_line ? row0_labels[x-1] : row1_labels[x-1]; 
+        label_curr_left = toggle_line ? row1_labels[x-1] : row0_labels[x-1]; 
     end
 endfunction
 
