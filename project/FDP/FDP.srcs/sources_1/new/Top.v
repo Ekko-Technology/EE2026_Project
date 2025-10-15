@@ -4,12 +4,12 @@ module Top(
     input clk, btnU,
 
     output ov7670_pwdn, ov7670_reset, ov7670_xclk,
-    input ov7670_href, ov7670_pclk_raw, ov7670_vsync,
+    input ov7670_href, ov7670_pclk, ov7670_vsync,
     inout ov7670_siod,
     output ov7670_sioc,
     input [7:0] ov7670_d,
     output [15:0] led,
-    input [1:0] sw,
+    input [4:0] sw,
 
     output vga_Hsync,
     output vga_Vsync,
@@ -37,16 +37,9 @@ module Top(
 
     // Wire for BRAM address from VGA controller
     wire [16:0] frame_addr;
-    wire [14:0] frame_pixel_raw; // 15-bit RGB555 from BRAM
-    wire [11:0] frame_pixel;     // Down-converted RGB444 to VGA
+    wire [11:0] image_pixel; // 12-bit RGB444 from BRAM
+    wire [11:0] frame_pixel;     // RGB444 to VGA
     wire active_area;
-    
-    //global clock buffer for camera pixel clock
-    wire ov7670_pclk;
-    BUFG pclk_bufg (
-        .I(ov7670_pclk_raw),
-        .O(ov7670_pclk)
-    );
 
     VGA_Controller vga(
         .clk25(clk25),
@@ -57,7 +50,6 @@ module Top(
         .vga_vsync(vga_Vsync),
         .frame_addr(frame_addr),
         .frame_pixel(frame_pixel),
-        .bitmap_pixel(bitmap_pixel),
         .display_switch(sw[1]),
         .active_area(active_area)
     );
@@ -74,7 +66,7 @@ module Top(
 
     wire we;
     wire [16:0] addr;
-    wire [14:0] dout; // RGB555 from capture
+    wire [11:0] dout; // RGB444 from capture
 
     // Debounce / synchronize btnU to camera pixel clock domain for capture reset
     reg [2:0] reset_sync = 3'b111;
@@ -99,46 +91,34 @@ module Top(
         .clka(ov7670_pclk),
         .wea(we),
         .addra(addr),
-        .dina(dout),          // write RGB565
+        .dina(dout),          // write RGB444
         .clkb(clk25),
         .addrb(frame_addr),
-        .doutb(frame_pixel_raw) // read RGB565
+        .doutb(image_pixel) // read RGB444
     );
-
-    // Image_Buffer frame_buffer(
-    //     .clk_write(ov7670_pclk), // 24 MHz
-    //     .write_addr(addr),
-    //     .write_data(dout),    //15 bit RGB555 pixel data
-    //     .write_done(vga_Vsync),
-    //     .clk_read(clk25), // 25 MHz
-    //     .read_addr(frame_addr),
-    //     .read_data(frame_pixel_raw),    //15 bit RGB555 pixel data
-    //     .frame_ready(led[1])
-    // );
-
-    // RGB555 -> RGB444 with simple LSB rounding (improves brightness balance)
-    wire [4:0] r5 = frame_pixel_raw[14:10];
-    wire [4:0] g5 = frame_pixel_raw[9:5];
-    wire [4:0] b5 = frame_pixel_raw[4:0];
-
-    wire [3:0] r4 = (r5[4:1] == 4'hF) ? 4'hF : (r5[4:1] + r5[0]);
-    wire [3:0] g4 = (g5[4:1] == 4'hF) ? 4'hF : (g5[4:1] + g5[0]);
-    wire [3:0] b4 = (b5[4:1] == 4'hF) ? 4'hF : (b5[4:1] + b5[0]);
-    assign frame_pixel = { r4, g4, b4 };
 
     wire bitmap_pixel;
-    // orange ball: 00111 01011 11101
-    assign bitmap_pixel = (r5 >= 5'd5 && r5 <=5'd9 && g5 >= 5'd9 && g5 <= 5'd13 && b5 >= 5'd27 && b5 <= 5'd31) ? 1'b1 : 1'b0;
+    wire threshold_pixel;
+    assign threshold_pixel = ((dout[3:0] >= 4'hB) && (dout[3:0] <= 4'hF) && //Red
+                              (dout[7:4] >= 4'h6) && (dout[7:4] <= 4'hF) && //Green
+                              (dout[11:8] >= 4'h0) && (dout[11:8] <= 4'h4)) //Blue
+                              ? 1'b1 : 1'b0;
     bitmap_mem bitmap_buffer(
-        .clka(clk25),
+        .clka(ov7670_pclk),
         .wea(we),
-        .addra(frame_addr),
-        .dina(bitmap_pixel),
+        .addra(addr),
+        .dina(threshold_pixel),          // write bitmap pixel
         .clkb(clk25),
         .addrb(frame_addr),
-        .doutb() // read RGB565
+        .doutb(bitmap_pixel) // read bitmap pixel
     );
 
-    assign led = (frame_addr == 38240) ? {1'b0, r5, g5, b5} : led;
+    // Direct RGB444 path
+    assign frame_pixel = (~sw[1])
+                            ? image_pixel
+                            : (bitmap_pixel ? 12'hFFF : 12'h000);
+
+    // Show middle pixel value on LEDs for debugging
+    assign led = (frame_addr == 38240) ? {4'b0000, image_pixel} : led;
 
 endmodule

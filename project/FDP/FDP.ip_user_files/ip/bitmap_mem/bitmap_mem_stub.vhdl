@@ -1,7 +1,7 @@
 -- Copyright 1986-2018 Xilinx, Inc. All Rights Reserved.
 -- --------------------------------------------------------------------------------
 -- Tool Version: Vivado v.2018.2 (lin64) Build 2258646 Thu Jun 14 20:02:38 MDT 2018
--- Date        : Tue Oct 14 21:53:39 2025
+-- Date        : Wed Oct 15 23:43:28 2025
 -- Host        : kc-ThinkPad-T14-Gen-5 running 64-bit Ubuntu 22.04.5 LTS
 -- Command     : write_vhdl -force -mode synth_stub
 --               /media/kc/Data/EE2026/project/FDP/FDP.runs/bitmap_mem_synth_1/bitmap_mem_stub.vhdl

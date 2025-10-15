@@ -11,9 +11,9 @@ create_clock -add -name sys_clk_pin -period 10.00 -waveform {0 5} [get_ports clk
 ## Switches
 set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports {sw[0]}]
 set_property -dict { PACKAGE_PIN V16   IOSTANDARD LVCMOS33 } [get_ports {sw[1]}]
-# set_property -dict { PACKAGE_PIN W16   IOSTANDARD LVCMOS33 } [get_ports {sw[2]}]
-# set_property -dict { PACKAGE_PIN W17   IOSTANDARD LVCMOS33 } [get_ports {sw[3]}]
-# set_property -dict { PACKAGE_PIN W15   IOSTANDARD LVCMOS33 } [get_ports {sw[4]}]
+set_property -dict { PACKAGE_PIN W16   IOSTANDARD LVCMOS33 } [get_ports {sw[2]}]
+set_property -dict { PACKAGE_PIN W17   IOSTANDARD LVCMOS33 } [get_ports {sw[3]}]
+set_property -dict { PACKAGE_PIN W15   IOSTANDARD LVCMOS33 } [get_ports {sw[4]}]
 # set_property -dict { PACKAGE_PIN V15   IOSTANDARD LVCMOS33 } [get_ports {sw[5]}]
 # set_property -dict { PACKAGE_PIN W14   IOSTANDARD LVCMOS33 } [get_ports {sw[6]}]
 # set_property -dict { PACKAGE_PIN W13   IOSTANDARD LVCMOS33 } [get_ports {sw[7]}]
@@ -96,9 +96,9 @@ set_property -dict { PACKAGE_PIN M18   IOSTANDARD LVCMOS33 } [get_ports ov7670_x
 set_property -dict { PACKAGE_PIN N17   IOSTANDARD LVCMOS33 } [get_ports ov7670_href];#Sch name = JC3
 set_property -dict { PACKAGE_PIN P18   IOSTANDARD LVCMOS33 } [get_ports ov7670_siod];#Sch name = JC4
 set_property -dict { PACKAGE_PIN L17   IOSTANDARD LVCMOS33 } [get_ports {ov7670_d[7]}];#Sch name = JC7
-set_property -dict { PACKAGE_PIN M19   IOSTANDARD LVCMOS33 } [get_ports ov7670_pclk_raw];#Sch name = JC8
+set_property -dict { PACKAGE_PIN M19   IOSTANDARD LVCMOS33 } [get_ports ov7670_pclk];#Sch name = JC8
 # Override differential clock constraint for camera pixel clock
-set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets {ov7670_pclk_raw_IBUF}]
+set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets {ov7670_pclk_IBUF}]
 set_property -dict { PACKAGE_PIN P17   IOSTANDARD LVCMOS33 } [get_ports ov7670_vsync];#Sch name = JC9
 set_property -dict { PACKAGE_PIN R18   IOSTANDARD LVCMOS33 } [get_ports ov7670_sioc];#Sch name = JC10
 

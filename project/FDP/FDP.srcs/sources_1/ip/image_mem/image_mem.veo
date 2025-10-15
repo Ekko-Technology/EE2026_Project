@@ -58,10 +58,10 @@ image_mem your_instance_name (
   .clka(clka),    // input wire clka
   .wea(wea),      // input wire [0 : 0] wea
   .addra(addra),  // input wire [16 : 0] addra
-  .dina(dina),    // input wire [14 : 0] dina
+  .dina(dina),    // input wire [11 : 0] dina
   .clkb(clkb),    // input wire clkb
   .addrb(addrb),  // input wire [16 : 0] addrb
-  .doutb(doutb)  // output wire [14 : 0] doutb
+  .doutb(doutb)  // output wire [11 : 0] doutb
 );
 // INST_TAG_END ------ End INSTANTIATION Template ---------
 
