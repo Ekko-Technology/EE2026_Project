@@ -99,6 +99,7 @@ set_property -dict { PACKAGE_PIN L17   IOSTANDARD LVCMOS33 } [get_ports {ov7670_
 set_property -dict { PACKAGE_PIN M19   IOSTANDARD LVCMOS33 } [get_ports ov7670_pclk];#Sch name = JC8
 # Override differential clock constraint for camera pixel clock
 set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets {ov7670_pclk_IBUF}]
+set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets {ov7670_vsync_IBUF}]
 set_property -dict { PACKAGE_PIN P17   IOSTANDARD LVCMOS33 } [get_ports ov7670_vsync];#Sch name = JC9
 set_property -dict { PACKAGE_PIN R18   IOSTANDARD LVCMOS33 } [get_ports ov7670_sioc];#Sch name = JC10
 

@@ -11,12 +11,11 @@
 module OV7670_Capture(
     input pclk,
     input vsync, href,
-    input ext_reset,          // external reset (synchronous to pclk domain)
-    input avg_enable,           // 1 = 2x2 averaging, 0 = decimate
+    input ext_reset,            // external reset (synchronous to pclk domain)
     input [7:0] d,
     output reg [16:0] addr,      // 0..76800-1 (320x240)
     output reg [11:0] dout,      // Stored as 12-bit RGB444 in BRAM
-    output reg we                // 1-cycle write enable
+    output reg we               // 1-cycle write enable
 );
 
     // Byte pair latch (camera outputs two successive bytes per pixel).
@@ -30,8 +29,8 @@ module OV7670_Capture(
     reg href_d = 1'b0;               // Delayed HREF for edge detection
 
     // Helper wires
-    wire pixel_complete = wr_hold[1];          // A full pixel assembled this cycle
-    wire end_of_line    = (href_d & ~href);     // Falling edge of HREF
+    wire pixel_complete = wr_hold[1];       // A full pixel assembled this cycle
+    wire end_of_line = (href_d & ~href);    // Falling edge of HREF
 
     always @(posedge pclk) begin
         if (vsync || ext_reset) begin
@@ -46,10 +45,10 @@ module OV7670_Capture(
             wr_hold <= { wr_hold[0], (href & ~wr_hold[0]) };  // pixel complete detection
             we <= 1'b0;
             if (pixel_complete && href) begin
-                if (~cam_x[0] && ~cam_y[0]) begin
+                if (~cam_x[0] && ~cam_y[0] && cam_x >= 28) begin    //i only want [13:319] = 306 right-side pixels
                     // RGB444 input
                     dout <= { d_latch[3:0], d_latch[7:4], d_latch[11:8] };
-                    addr <= (cam_y[8:1]) * 18'd320 + cam_x[9:1];
+                    addr <= (cam_y[8:1]) * 18'd306 + cam_x[9:1]-14;
                     we <= 1'b1;
                 end
                 // advance X after processing pixel

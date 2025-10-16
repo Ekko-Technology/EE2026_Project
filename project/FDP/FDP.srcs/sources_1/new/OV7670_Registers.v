@@ -26,7 +26,7 @@ module OV7670_Registers(
 
         case (address)
             8'h00: sreg <= 16'h1280; // COM7   Reset
-            8'h01: sreg <= 16'h0000; // COM7   Reset
+            8'h01: sreg <= 16'h0000; // write random register to delay
             8'h02: sreg <= 16'h1204; // COM7   Size & RGB output
             8'h03: sreg <= 16'h1100; // CLKRC  Prescaler - Fin/(1+1)
             8'h04: sreg <= 16'h0C00; // COM3   Enable scaling

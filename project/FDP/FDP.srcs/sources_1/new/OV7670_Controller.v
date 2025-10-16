@@ -16,8 +16,6 @@ module OV7670_Controller(
 );
 
     // Internal signals
-    reg sys_clk = 1'b0;
-    reg clk_div = 1'b0;
     wire [15:0] command;
     wire finished;
     wire taken;
@@ -42,13 +40,5 @@ module OV7670_Controller(
 
     // Instantiate register generator
     OV7670_Registers camera_regs(clk, resend, taken, command, finished);
-
-    // Simple clock divider (xclk toggles every clk cycle)
-    // always @(posedge clk) begin
-    //     clk_div <= clk_div + 1;
-    //     if (clk_div == 1'b1) begin
-    //         sys_clk <= ~sys_clk;    // Toggle every 2 cycles = 25MHz
-    //     end
-    // end
 
 endmodule
