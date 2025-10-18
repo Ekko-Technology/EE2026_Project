@@ -26,6 +26,124 @@ module ufds_sim(    );
 // Verifies neighbor helpers return zeros on the first line (edges)
 // Verifies U/UL/UR fetch from the previous row when we preload labels between lines
 
+    // localparam integer IMG_W = 24;
+    // localparam integer IMG_H = 12;
+
+    // // clocks
+    // reg pclk=0, clk=0, rst=1;
+    // always #20 pclk = ~pclk; // 25 MHz
+    // always #5  clk  = ~clk;  // 100 MHz
+
+    // // producer (no backpressure)
+    // reg p_valid=0, p_fs=0, p_ls=0, p_fe=0, p_px=0;
+
+    // wire [2:0] comp_count;
+    // wire [8:0] comp0_left,  comp1_left,  comp2_left,  comp3_left;
+    // wire [8:0] comp0_right, comp1_right, comp2_right, comp3_right;
+    // wire [7:0] comp0_top,   comp1_top,   comp2_top,   comp3_top;
+    // wire [7:0] comp0_bottom,comp1_bottom,comp2_bottom,comp3_bottom;
+    // wire [8:0] comp0_cx,    comp1_cx,    comp2_cx,    comp3_cx;
+    // wire [7:0] comp0_cy,    comp1_cy,    comp2_cy,    comp3_cy;
+    // wire [15:0]comp0_area,  comp1_area,  comp2_area,  comp3_area;
+
+    // UFDS_Bridge #(.FIFO_DEPTH(1024), .FIFO_ABITS(10)) dut (
+    //     .pclk(pclk), .p_rst(rst),
+    //     .p_valid(p_valid), .p_fs(p_fs), .p_ls(p_ls), .p_fe(p_fe), .p_px(p_px),
+    //     .clk(clk), .ext_reset(rst),
+
+    //     // .bbox_left(), .bbox_right(), .centroid_x(),
+    //     // .bbox_top(),  .bbox_bottom(), .centroid_y(),
+
+    //     .comp_count(comp_count),
+    //     .comp0_left(comp0_left), .comp1_left(comp1_left), .comp2_left(comp2_left), .comp3_left(comp3_left),
+    //     .comp0_right(comp0_right), .comp1_right(comp1_right), .comp2_right(comp2_right), .comp3_right(comp3_right),
+    //     .comp0_top(comp0_top), .comp1_top(comp1_top), .comp2_top(comp2_top), .comp3_top(comp3_top),
+    //     .comp0_bottom(comp0_bottom), .comp1_bottom(comp1_bottom), .comp2_bottom(comp2_bottom), .comp3_bottom(comp3_bottom),
+    //     .comp0_cx(comp0_cx), .comp1_cx(comp1_cx), .comp2_cx(comp2_cx), .comp3_cx(comp3_cx),
+    //     .comp0_cy(comp0_cy), .comp1_cy(comp1_cy), .comp2_cy(comp2_cy), .comp3_cy(comp3_cy),
+    //     .comp0_area(comp0_area), .comp1_area(comp1_area), .comp2_area(comp2_area), .comp3_area(comp3_area)
+    // );
+
+    // integer x, y;
+    // reg started = 0;
+
+    // // fixed-rate raster source
+    // always @(posedge pclk) begin
+    //     if (rst) begin
+    //         started <= 1'b0;
+    //         p_valid <= 1'b0; p_fs<=1'b0; p_ls<=1'b0; p_fe<=1'b0; p_px<=1'b0;
+    //         x <= 0; y <= 0;
+    //     end else if (!started) begin
+    //         // wait until UFDS reports ready (done with init)
+    //         if (dut.ready_o) begin
+    //             started <= 1'b1;
+    //             p_valid <= 1'b1;
+    //             p_fs    <= 1'b1; // first pixel will assert fs & ls
+    //             p_ls    <= 1'b1;
+    //             p_fe    <= 1'b0;
+    //             p_px    <= 1'b0;
+    //             x <= 0; y <= 0;
+    //         end else begin
+    //             p_valid <= 1'b0; p_fs<=1'b0; p_ls<=1'b0; p_fe<=1'b0; p_px<=1'b0;
+    //         end
+    //     end else begin
+    //         p_valid <= 1'b1;
+    //         p_fs    <= (x==0 && y==0);
+    //         p_ls    <= (x==0);
+    //         p_fe    <= (x==IMG_W-1 && y==IMG_H-1);
+    //         // 4 components A,B,C,D
+    //         p_px <= ((x>=2  && x<=5 ) && (y>=1 && y<=3)) ? 1'b1 :
+    //                 ((x>=9  && x<=12) && (y>=0 && y<=1)) ? 1'b1 :
+    //                 ((x>=15 && x<=17) && (y>=5 && y<=8)) ? 1'b1 :
+    //                 (((x==20) && (y>=5 && y<=7)) || ((x>=19 && x<=21) && (y==6))) ? 1'b1 : 1'b0;
+
+    //         if (x == IMG_W-1) begin
+    //             x <= 0;
+    //             if (y == IMG_H-1) y <= 0; else y <= y + 1;
+    //         end else begin
+    //             x <= x + 1;
+    //         end
+    //     end
+    // end
+
+    // // helper: check presence in any slot
+    // task expect_box(input [8:0] L, input [8:0] R, input [7:0] T, input [7:0] B,
+    //                 input [8:0] CX, input [7:0] CY);
+    //     integer hits;
+    //     begin
+    //         hits = 0;
+    //         if (comp0_left==L && comp0_right==R && comp0_top==T && comp0_bottom==B && comp0_cx==CX && comp0_cy==CY) hits = hits + 1;
+    //         if (comp1_left==L && comp1_right==R && comp1_top==T && comp1_bottom==B && comp1_cx==CX && comp1_cy==CY) hits = hits + 1;
+    //         if (comp2_left==L && comp2_right==R && comp2_top==T && comp2_bottom==B && comp2_cx==CX && comp2_cy==CY) hits = hits + 1;
+    //         if (comp3_left==L && comp3_right==R && comp3_top==T && comp3_bottom==B && comp3_cx==CX && comp3_cy==CY) hits = hits + 1;
+    //         if (hits == 0) begin
+    //             $display("ERROR: bbox [L%0d R%0d T%0d B%0d] cx=%0d cy=%0d not found", L,R,T,B,CX,CY);
+    //             $fatal;
+    //         end
+    //     end
+    // endtask
+
+    // initial begin
+    //     repeat (8) @(posedge clk);
+    //     rst = 0;
+
+    //     // Let sim run long enough: frame is 11.52us; add init margin (~13.5us) + slack
+    //     #(120_000);
+
+    //     if (comp_count < 3'd4) begin
+    //         $display("ERROR: comp_count=%0d expected 4", comp_count); $fatal;
+    //     end
+    //     // A, B, C, D (order free)
+    //     expect_box(9'd2,  9'd5,  8'd1, 8'd3,  9'd3,  8'd2);
+    //     expect_box(9'd9,  9'd12, 8'd0, 8'd1,  9'd10, 8'd0);
+    //     expect_box(9'd15, 9'd17, 8'd5, 8'd8,  9'd16, 8'd6);
+    //     expect_box(9'd19, 9'd21, 8'd5, 8'd7,  9'd20, 8'd6);
+
+    //     $display("PASS: all 4 components detected and bbox/centroid correct.");
+    //     $finish;
+    // end
+
+     //Successfully tested multi-component detection on 24x12 image with 4 separated objects, but poor sync
     // Test image size
     localparam integer IMG_W = 24;
     localparam integer IMG_H = 12;
@@ -35,6 +153,7 @@ module ufds_sim(    );
 
     wire [8:0] bbox_left, bbox_right, centroid_x;
     wire [7:0] bbox_top,  bbox_bottom, centroid_y;
+
 
     // DUT
     // If UFDS_Detector has WIDTH/HEIGHT parameters, pass .WIDTH(IMG_W), .HEIGHT(IMG_H)
@@ -52,6 +171,7 @@ module ufds_sim(    );
 
     // 100 MHz
     always #5 clk = ~clk;
+    
 
 
 
@@ -180,12 +300,28 @@ end
         check_component(5, 19,21, 5, 7);   // D
         check_counts(4, 12+8+12+5);
 
+        // Validate single-bbox outputs (largest component = A)
+        // Give a couple cycles for any last updates to settle
+        repeat (4) @(posedge clk);
+        if (bbox_left   !== 9'd2 ||
+            bbox_right  !== 9'd5 ||
+            bbox_top    !== 8'd1 ||
+            bbox_bottom !== 8'd3 ||
+            centroid_x  !== 9'd3 ||
+            centroid_y  !== 8'd2) begin
+            $display("ERROR: bbox outputs mismatch. got L%0d R%0d T%0d B%0d CX=%0d CY=%0d, expected L2 R5 T1 B3 CX=3 CY=2",
+                     bbox_left, bbox_right, bbox_top, bbox_bottom, centroid_x, centroid_y);
+            $fatal;
+        end else begin
+            $display("OK: single-bbox outputs match largest component A.");
+        end
+
         $display("PASS: multi-component test");
         $finish;
     end
 
 
-
+    
 
     /* // Successfully tested 3x8 pixel block with 2x3 object
     );
@@ -258,7 +394,7 @@ end
         end
 
     end
-    /*
+    */
 
     /*
         // Reset
