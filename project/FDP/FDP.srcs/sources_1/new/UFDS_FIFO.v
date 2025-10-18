@@ -1,102 +1,86 @@
-`timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 18.10.2025 03:18:31
-// Design Name: 
-// Module Name: UFDS_FIFO
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
+`timescale 1ns/1ps
+module UFDS_FIFO #(
+    parameter WIDTH = 4,
+    parameter ADDR_BITS = 9 // depth = 2**ADDR_BITS (512 entries)
+)(
+    input  wire              wr_clk,
+    input  wire              wr_rst,
+    input  wire              wr_en,
+    input  wire [WIDTH-1:0]  wr_data,
+    output wire              wr_full,
 
-
-// Asynchronous (dual-clock) FIFO: write at wr_clk (25 MHz), read at rd_clk (100 MHz)
-module UFDS_FIFO (
-    // write clock domain (25 MHz)
-    input wire wr_clk,
-    input wire wr_rst,
-    input wire wr_en,
-    input wire [WIDTH-1:0] wr_data,
-    output wire wr_full,
-    // read clock domain (100 MHz)
-    input wire rd_clk,
-    input wire rd_rst,
-    input wire rd_en,
-    output reg [WIDTH-1:0] rd_data,
-    output wire rd_empty
+    input  wire              rd_clk,
+    input  wire              rd_rst,
+    input  wire              rd_en,
+    output reg  [WIDTH-1:0]  rd_data,
+    output wire              rd_empty
 );
-    localparam integer WIDTH = 4; // {fs, ls, fe, px}
-    localparam integer DEPTH = 1024; // power of two
-    localparam integer ADDR_BITS = 10; // log2(DEPTH)
+    localparam DEPTH = (1 << ADDR_BITS);
 
+    // Memory
     reg [WIDTH-1:0] mem [0:DEPTH-1];
 
-    // binary and Gray pointers include extra MSB for wrap detection
-    reg [ADDR_BITS:0] wptr_bin=0, rptr_bin=0;
-    reg [ADDR_BITS:0] wptr_gray=0, rptr_gray=0;
+    // Binary and Gray pointers
+    reg [ADDR_BITS:0] wr_bin = 0, rd_bin = 0;
+    reg [ADDR_BITS:0] wr_gray = 0, rd_gray = 0;
 
-    // cross-domain synchronizers
-    reg [ADDR_BITS:0] rptr_gray_w1=0, rptr_gray_w2=0;
-    reg [ADDR_BITS:0] wptr_gray_r1=0, wptr_gray_r2=0;
+    // Synchronizers for cross-domain Gray pointers
+    reg [ADDR_BITS:0] rd_gray_w1=0, rd_gray_w2=0;
+    reg [ADDR_BITS:0] wr_gray_r1=0, wr_gray_r2=0;
 
-    // write domain
-    wire do_write = wr_en & ~wr_full;
-    wire [ADDR_BITS:0] wptr_bin_n  = wptr_bin + do_write;
-    wire [ADDR_BITS:0] wptr_gray_n = (wptr_bin_n >> 1) ^ wptr_bin_n;
+    // Bin<->Gray helpers
+    wire [ADDR_BITS:0] wr_bin_n = wr_bin + (wr_en & ~wr_full);
+    wire [ADDR_BITS:0] rd_bin_n = rd_bin + (rd_en & ~rd_empty);
+    wire [ADDR_BITS:0] wr_gray_n = (wr_bin_n >> 1) ^ wr_bin_n;
+    wire [ADDR_BITS:0] rd_gray_n = (rd_bin_n >> 1) ^ rd_bin_n;
 
-    // full when next write == read with MSBs inverted
-    wire [ADDR_BITS:0] rgray_w = rptr_gray_w2;
-    assign wr_full = (wptr_gray_n == {~rgray_w[ADDR_BITS:ADDR_BITS-1], rgray_w[ADDR_BITS-2:0]});
+    // Full/Empty
+    // Full when next write Gray equals read Gray with MSBs inverted
+    wire full_nxt = (wr_gray_n == {~rd_gray_w2[ADDR_BITS:ADDR_BITS-1], rd_gray_w2[ADDR_BITS-2:0]});
+    assign wr_full = full_nxt;
 
+    // Empty when write Gray equals current read Gray
+    assign rd_empty = (wr_gray_r2 == rd_gray);
+
+    // Write domain
     always @(posedge wr_clk) begin
         if (wr_rst) begin
-            wptr_bin <= 0; wptr_gray <= 0;
-            rptr_gray_w1 <= 0; rptr_gray_w2 <= 0;
+            wr_bin  <= 0;
+            wr_gray <= 0;
+            rd_gray_w1 <= 0;
+            rd_gray_w2 <= 0;
         end else begin
-            // sync read pointer into write domain
-            rptr_gray_w1 <= rptr_gray;
-            rptr_gray_w2 <= rptr_gray_w1;
-            // write
-            if (do_write) mem[wptr_bin[ADDR_BITS-1:0]] <= wr_data;
-            // advance
-            wptr_bin  <= wptr_bin_n;
-            wptr_gray <= wptr_gray_n;
+            // synchronize read pointer into write clock
+            rd_gray_w1 <= rd_gray;
+            rd_gray_w2 <= rd_gray_w1;
+
+            if (wr_en && ~wr_full) begin
+                mem[wr_bin[ADDR_BITS-1:0]] <= wr_data;
+                wr_bin  <= wr_bin_n;
+                wr_gray <= wr_gray_n;
+            end
         end
     end
 
-    // read domain
-    wire do_read = rd_en & ~rd_empty;
-    wire [ADDR_BITS:0] rptr_bin_n = rptr_bin + do_read;
-    wire [ADDR_BITS:0] rptr_gray_n = (rptr_bin_n >> 1) ^ rptr_bin_n;
-
-    // empty when read pointer equals synchronized write pointer
-    wire [ADDR_BITS:0] wgray_r = wptr_gray_r2;
-    assign rd_empty = (rptr_gray == wgray_r);
-
+    // Read domain (1-cycle read latency)
     always @(posedge rd_clk) begin
         if (rd_rst) begin
-            rptr_bin <= 0; rptr_gray <= 0;
-            wptr_gray_r1 <= 0; wptr_gray_r2 <= 0;
+            rd_bin  <= 0;
+            rd_gray <= 0;
+            wr_gray_r1 <= 0;
+            wr_gray_r2 <= 0;
             rd_data <= {WIDTH{1'b0}};
         end else begin
-            // sync write pointer into read domain
-            wptr_gray_r1 <= wptr_gray;
-            wptr_gray_r2 <= wptr_gray_r1;
-            // read
-            if (do_read) rd_data <= mem[rptr_bin[ADDR_BITS-1:0]];
-            // advance
-            rptr_bin  <= rptr_bin_n;
-            rptr_gray <= rptr_gray_n;
+            // synchronize write pointer into read clock
+            wr_gray_r1 <= wr_gray;
+            wr_gray_r2 <= wr_gray_r1;
+
+            // synchronous read: output updates one cycle after rd_en
+            if (rd_en && ~rd_empty) begin
+                rd_data <= mem[rd_bin[ADDR_BITS-1:0]];
+                rd_bin  <= rd_bin_n;
+                rd_gray <= rd_gray_n;
+            end
         end
     end
 endmodule

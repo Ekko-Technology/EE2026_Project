@@ -46,8 +46,8 @@ module UFDS_Detector(
     output reg [7:0] bbox_top,
     output reg [7:0] bbox_bottom,
     output reg [8:0] centroid_x,
-    output reg [7:0] centroid_y
-    // output reg out_valid
+    output reg [7:0] centroid_y,
+    output wire ready_to_read
 
     );
 
@@ -139,9 +139,7 @@ reg [23:0] ua_area_new;         // next area when adding a pixel
 reg [23:0] best_area;           // running largest area
 reg [label_bits-1:0] best_lbl;  // label of current best
 
-reg [x_bitsize-1:0] minx_new, maxx_new;
-reg [y_bitsize-1:0] miny_new, maxy_new;
-reg [31:0]          sumx_new, sumy_new;
+
 
 // FSM encoding
 reg [4:0] state;
@@ -173,6 +171,7 @@ localparam S_UNION_MERGE_3 = 24;
 localparam S_LABEL_WRITE = 25;
 localparam S_ADVANCE = 26;
 
+assign ready_to_read = (state == S_READY);
 
 /*
  * main FSM by per-pixel UFDS sequence
