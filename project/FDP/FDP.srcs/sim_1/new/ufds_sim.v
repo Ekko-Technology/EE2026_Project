@@ -20,11 +20,174 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module ufds_sim(
+module ufds_sim(    );
 // Verifies x resets on frame_start/line_start and only increments when in_valid=1
 // Verifies toggle_line flips at each new line
 // Verifies neighbor helpers return zeros on the first line (edges)
 // Verifies U/UL/UR fetch from the previous row when we preload labels between lines
+
+    // Test image size
+    localparam integer IMG_W = 24;
+    localparam integer IMG_H = 12;
+
+    reg  clk=0, rst=1;
+    reg  in_valid=0, frame_start=0, line_start=0, frame_end=0, curr_pix=0;
+
+    wire [8:0] bbox_left, bbox_right, centroid_x;
+    wire [7:0] bbox_top,  bbox_bottom, centroid_y;
+
+    // DUT
+    // If UFDS_Detector has WIDTH/HEIGHT parameters, pass .WIDTH(IMG_W), .HEIGHT(IMG_H)
+    UFDS_Detector dut(
+        .clk(clk), .ext_reset(rst),
+        .in_valid(in_valid),
+        .frame_start(frame_start),
+        .line_start(line_start),
+        .frame_end(frame_end),
+        .curr_pix(curr_pix),
+        .bbox_left(bbox_left), .bbox_right(bbox_right),
+        .bbox_top(bbox_top),   .bbox_bottom(bbox_bottom),
+        .centroid_x(centroid_x), .centroid_y(centroid_y)
+    );
+
+    // 100 MHz
+    always #5 clk = ~clk;
+
+
+
+    // Foreground map: 4 separated components
+    // A: x=2..5,  y=1..3  (area 12)
+    // B: x=9..12, y=0..1  (area 8)
+    // C: x=15..17,y=5..8  (area 12)
+    // D: plus centered at (20,6), arms len=1 (area 5)
+    function   fg(input integer x, input integer y);
+        begin
+            fg = 0;
+            if ((x>=2  && x<=5 ) && (y>=1 && y<=3)) fg = 1; // A
+            if ((x>=9  && x<=12) && (y>=0 && y<=1)) fg = 1; // B
+            if ((x>=15 && x<=17) && (y>=5 && y<=8)) fg = 1; // C
+            if ((x==20 && (y>=5 && y<=7)) || ((x>=19 && x<=21) && y==6)) fg = 1; // D
+        end
+    endfunction
+
+    // Push one pixel: assert on posedge, deassert on negedge (matches DUT sampling)
+    task push_pixel(input   fs, input   ls, input   px);
+    begin
+        wait (dut.state == dut.S_READY);
+        @(posedge clk);
+        curr_pix    = px;
+        in_valid   = 1'b1;
+        frame_start = fs;
+        line_start  = ls;
+        @(negedge clk);
+        in_valid    = 1'b0;
+        frame_start = 1'b0;
+        frame_end  = 1'b0;
+        line_start  = 1'b0;
+    end
+    endtask
+
+    // Helpers: scan active roots by bbox and simple checks
+    function integer find_by_bbox(input integer L, input integer R, input integer T, input integer B);
+        integer i;
+        begin
+            find_by_bbox = 0;
+            for (i=1; i<dut.next_label; i=i+1) begin
+                if (dut.active_root[i] &&
+                    dut.min_x[i]==L && dut.max_x[i]==R &&
+                    dut.min_y[i]==T && dut.max_y[i]==B) begin
+                    find_by_bbox = i;
+                end
+            end
+        end
+    endfunction
+
+    task check_component(input integer expected_area,
+                         input integer L, input integer R,
+                         input integer T, input integer B);
+        integer lbl;
+        begin
+            lbl = find_by_bbox(L,R,T,B);
+            if (lbl == 0) begin
+                $display("ERROR: bbox [L%0d R%0d T%0d B%0d] not found", L,R,T,B);
+                $fatal;
+            end
+            if (dut.area[lbl] !== expected_area) begin
+                $display("ERROR: area[%0d]=%0d expected %0d", lbl, dut.area[lbl], expected_area);
+                $fatal;
+            end
+            $display("OK: label %0d area=%0d bbox=[L%0d R%0d T%0d B%0d]", lbl, dut.area[lbl], L,R,T,B);
+        end
+    endtask
+
+    task check_counts(input integer expected_active, input integer expected_total_area);
+        integer i, cnt, sum_area;
+        begin
+            cnt = 0; sum_area = 0;
+            for (i=1; i<dut.next_label; i=i+1) begin
+                if (dut.active_root[i]) begin
+                    cnt = cnt + 1;
+                    sum_area = sum_area + dut.area[i];
+                end
+            end
+            if (cnt !== expected_active) begin
+                $display("ERROR: active=%0d expected %0d", cnt, expected_active); $fatal;
+            end
+            if (sum_area !== expected_total_area) begin
+                $display("ERROR: total_area=%0d expected %0d", sum_area, expected_total_area); $fatal;
+            end
+            $display("OK: active=%0d total_area=%0d", cnt, sum_area);
+        end
+    endtask
+
+    // Optional: assert no X on neighbors when accepting a pixel
+always @(posedge clk) begin
+    if (dut.state==dut.S_READY && in_valid) begin
+        if ((^dut.left_label)    === 1'bx ||
+            (^dut.up_label)      === 1'bx ||
+            (^dut.upleft_label)  === 1'bx ||
+            (^dut.upright_label) === 1'bx) begin
+            $display("ERROR: neighbor X at x=%0d y=%0d", dut.x, dut.y);
+            $stop; // or $finish;
+        end
+    end
+end
+
+    integer x, y;
+    initial begin
+        // Reset
+        repeat (4) @(posedge clk);
+        rst = 0;
+
+        // Wait DUT ready
+        #44150;
+
+        // Stream the 24x12 frame
+        for (y=0; y<IMG_H; y=y+1) begin
+            for (x=0; x<IMG_W; x=x+1) begin
+                push_pixel((y==0 && x==0), (x==0), fg(x,y));
+                wait (dut.state == dut.S_READY);
+            end
+        end
+
+        // Drain merges
+        repeat (100) @(posedge clk);
+
+        // Checks
+        check_component(12, 2, 5, 1, 3);   // A
+        check_component(8,  9,12, 0, 1);   // B
+        check_component(12,15,17, 5, 8);   // C
+        check_component(5, 19,21, 5, 7);   // D
+        check_counts(4, 12+8+12+5);
+
+        $display("PASS: multi-component test");
+        $finish;
+    end
+
+
+
+
+    /* // Successfully tested 3x8 pixel block with 2x3 object
     );
     // DUT ports
     reg  clk = 0;
@@ -62,12 +225,12 @@ module ufds_sim(
     task push_pixel(input fs, input ls, input px);
         begin
             wait (dut.state == dut.S_READY);
-            @(negedge clk);
+            @(posedge clk);
             curr_pix    = px;
             in_valid    = 1;
             frame_start = fs;
             line_start  = ls;
-            @(posedge clk);
+            @(negedge clk);
             in_valid    = 0;
             frame_start = 0;
             frame_end   = 0;
@@ -84,16 +247,18 @@ module ufds_sim(
         rst = 0;
 
         // wait for init sweeps to complete
-        wait (dut.state == dut.S_READY);
+        #44150;
 
         // feed 3 lines of 8 pixels with a simple 2x3 block at (x=2..3,y=0..2)
         for (yi=0; yi<3; yi=yi+1) begin
             for (xi=0; xi<8; xi=xi+1) begin
                 push_pixel((yi==0 && xi==0), (xi==0), ((xi>=2 && xi<=3) ? 1:0));
+                wait (dut.state == dut.S_READY);
             end
         end
 
     end
+    /*
 
     /*
         // Reset

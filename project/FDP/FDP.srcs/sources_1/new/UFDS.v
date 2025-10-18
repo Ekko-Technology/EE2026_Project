@@ -85,6 +85,7 @@ reg active_root [0:MAX_LABELS-1]; // boolean array marking whether a component I
 reg [label_bits-1:0] next_label; // next unused label n0.
 
 // stats for each component (hence only store for root pixel, where parent[label] == label)
+// centroid_x = sum_x / area ; centroid_y = sum_y / area
 reg [23:0] area [0:MAX_LABELS-1]; // number of pixels in this component
 reg [31:0] sum_x [0:MAX_LABELS-1]; // sum of x coordinates of pixels in this component
 reg [31:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
@@ -114,20 +115,24 @@ reg [label_bits-1:0] root_up;
 reg [label_bits-1:0] root_upleft;
 reg [label_bits-1:0] root_upright;
 reg [label_bits-1:0] R; // final root label for current pixel
+reg [label_bits-1:0] R_next; // temp to get next smallest root
 
 // temporary counters to help me walk along the width and labels during a sweep, to not touch global ref for x coord 
 reg [x_bitsize-1:0] init_width_idx;
 reg [label_bits-1:0] init_label_idx;
 
 // temporary registers to help in find() aka the find engine
-reg [label_bits-1:0] find_curr; // used in S_FIND_* states to follow parents to find root of component iteratively
+// reg [label_bits-1:0] find_curr; // used in S_FIND_* states to follow parents to find root of component iteratively
 
 // temporary registers to help in union() aka the union engine (which uses find engine twice, then attach and merge stats)
 reg [label_bits-1:0] ua, ub; // inputs
 reg [label_bits-1:0] ra, rb; // roots
 
-wire [label_bits-1:0] parent_curr = parent[find_curr];
+// wire [label_bits-1:0] parent_curr = parent[find_curr];
 // wire [label_bits-1:0] rootR_now = (parent[R]==R) ? R : parent[R]; // root of R now (after a union)
+
+reg [label_bits-1:0] tmp;
+reg curr_pix_q;
 
 // // FIFO wires
 // wire [3:0] fifo_dout;
@@ -189,8 +194,9 @@ always @(posedge clk) begin
         init_label_idx <= 0;
         next_label <= 1;
 
-        find_curr <= 0;
-        ua<=0; ub<=0; ra<=0; rb<=0;
+        // find_curr <= 0;
+        ua<=0; ub<=0; 
+        // ra<=0; rb<=0;
 
         state <= S_INIT_LINES; // and later S_INIT_UFDS
 
@@ -250,19 +256,20 @@ always @(posedge clk) begin
 
             // ready to accept a new pixel and start the whole UFDS process
             S_READY: begin
-                // if (in_valid) begin
+                if (in_valid) begin
                     // sample provisional neighbor labels
+                    curr_pix_q <= curr_pix;
                     left <= left_label;
                     up <= up_label;
                     upleft <= upleft_label;
                     upright <= upright_label;
 
                     state <= S_SAMPLE;
-                // end
+                end
             end
 
             S_SAMPLE: begin
-                if (!curr_pix) begin
+                if (!curr_pix_q) begin
                     // 0 means label 0 which rep background
                     case (toggle_line)
                         0: row1_labels[x] <= 0;
@@ -270,18 +277,25 @@ always @(posedge clk) begin
                     endcase
                     state <= S_ADVANCE;
                 end else begin
-                    if (x == 0) begin
-                        if (y == 0) begin
-                            state <= S_CHOOSE; // first pixel of whole frame
-                        end else begin
-                            state <= S_FIND_U; // no left neighbour
-                        end
-                    end else begin
-                        state <= S_FIND_L; // begin find on left neighbor
-                    end
+                    // immediately get their roots
+                    root_left <= left;
+                    root_up <= up;
+                    root_upleft <= upleft;
+                    root_upright <= upright;
+                    state <= S_CHOOSE;
+                    // if (x == 0) begin
+                    //     if (y == 0) begin
+                    //         state <= S_CHOOSE; // first pixel of whole frame
+                    //     end else begin
+                    //         state <= S_FIND_U; // no left neighbour
+                    //     end
+                    // end else begin
+                    //     state <= S_FIND_L; // begin find on left neighbor
+                    // end
                 end
             end
-
+            
+            /*
             // find(L)
             S_FIND_L: begin
                 if (left != 0) begin
@@ -358,28 +372,48 @@ always @(posedge clk) begin
                     find_curr <= parent_curr;
                 end
             end
+            */
 
             // choose representative for current pixel (smallest non-zero root of all 4 neighbours)
             S_CHOOSE: begin
-                R <= 0;
-                if (root_left != 0) begin
-                    R <= root_left;
+                R_next = 0;
+                if (root_left != 0 && (R_next == 0 || root_left < R_next)) begin
+                    R_next = root_left;
                 end
-                if (root_up != 0 && (R == 0 || root_up < R)) begin
-                    R <= root_up;
+                if (root_up != 0 && (R_next == 0 || root_up < R_next)) begin
+                    R_next = root_up;
                 end
-                if (root_upleft != 0 && (R == 0 || root_upleft < R)) begin
-                    R <= root_upleft;
+                if (root_upleft != 0 && (R_next == 0 || root_upleft < R_next)) begin
+                    R_next = root_upleft;
                 end
-                if (root_upright != 0 && (R == 0 || root_upright < R)) begin
-                    R <= root_upright;
+                if (root_upright != 0 && (R_next == 0 || root_upright < R_next)) begin
+                    R_next = root_upright;
                 end
 
-                if ((root_left | root_up | root_upleft | root_upright) == 0) begin
+                R <= R_next;
+                if (R_next == 0) begin
                     state <= S_ALLOC;
                 end else begin
                     state <= S_UNION_DECIDE;
                 end
+
+                // if (root_left != 0) begin
+                //     R <= root_left;
+                // end
+                // if (root_up != 0 && (R == 0 || root_up < R)) begin
+                //     R <= root_up;
+                // end
+                // if (root_upleft != 0 && (R == 0 || root_upleft < R)) begin
+                //     R <= root_upleft;
+                // end
+                // if (root_upright != 0 && (R == 0 || root_upright < R)) begin
+                //     R <= root_upright;
+                // end
+                // if ((root_left | root_up | root_upleft | root_upright) == 0) begin
+                //     state <= S_ALLOC;
+                // end else begin
+                //     state <= S_UNION_DECIDE;
+                // end
             end
 
             // allocate new label if all 4 neighbours are background (new component found)
@@ -406,23 +440,28 @@ always @(posedge clk) begin
             end
 
             // pick at most one neighbor to union with (priority L > U > UL > UR)
+            // now operands are already roots, no need to find roots.
             S_UNION_DECIDE: begin
                 ua <= R;
                 if (root_left != 0 && root_left != R) begin 
                     ub <= root_left; 
-                    state <= S_UNION_FIND_A; 
+                    // state <= S_UNION_FIND_A; 
+                    state <= S_UNION_ATTACH;
                 end
                 else if (root_up != 0 && root_up != R) begin 
                     ub <= root_up; 
-                    state <= S_UNION_FIND_A; 
+                    // state <= S_UNION_FIND_A; 
+                    state <= S_UNION_ATTACH;
                 end
                 else if (root_upleft != 0 && root_upleft != R) begin 
                     ub <= root_upleft; 
-                    state <= S_UNION_FIND_A; 
+                    // state <= S_UNION_FIND_A; 
+                    state <= S_UNION_ATTACH;
                 end
                 else if (root_upright != 0 && root_upright != R) begin 
                     ub <= root_upright; 
-                    state <= S_UNION_FIND_A; 
+                    // state <= S_UNION_FIND_A; 
+                    state <= S_UNION_ATTACH;
                 end else begin
                     state <= S_LABEL_WRITE; // nothing to union
                 end
@@ -443,6 +482,7 @@ always @(posedge clk) begin
              * }
              */
              
+             /*
             // WEIGHTED UNION part 1: find(ua) - find root of ua
             S_UNION_FIND_A: begin
                 if (parent[ua] == ua) begin
@@ -462,26 +502,42 @@ always @(posedge clk) begin
                     ub <= parent[ub];
                 end
             end
-
+            */
+            
             // WEIGHTED UNION part 3: attach lower-rank under higher-rank (and bump rank on tie)
             S_UNION_ATTACH: begin
-                if (ra == rb) begin // i can assert this is unreachable but i will leave it in for explicity
+                if (ua == ub) begin // assert to be unreachable but defensive measure
                     state <= S_LABEL_WRITE; // nothing to do
-                end else if (rank[ra] < rank[rb]) begin
-                    parent[ra] <= rb; // attach ra -> rb
-                    // merge stats ra -> rb in next states
-                    ua <= rb; ub <= ra; // reuse ua = winner, ub = loser
-                    state <= S_UNION_MERGE_0;
-                end else if (rank[ra] > rank[rb]) begin
-                    parent[rb] <= ra; // attach rb -> ra
-                    ua <= ra; ub <= rb;
+                end else if (rank[ua] >= rank[ub]) begin
+                    parent[ub] <= ua; // attach ub -> ua
+                    if (rank[ua] == rank[ub]) begin
+                        rank[ua] <= rank[ua] + 1;
+                    end
                     state <= S_UNION_MERGE_0;
                 end else begin
-                    parent[rb] <= ra; // attach rb -> ra and bump rank
-                    rank[ra] <= rank[ra] + 1;
-                    ua <= ra; ub <= rb;
+                    parent[ua] <= ub; // attach ua -> ub
+                    // swap ua and ub so that ua is always the winner (the root that remains)
+                    ua <= ub;
+                    ub <= ua;
                     state <= S_UNION_MERGE_0;
                 end
+                // if (ra == rb) begin // i can assert this is unreachable but i will leave it in for explicity
+                //     state <= S_LABEL_WRITE; // nothing to do
+                // end else if (rank[ra] < rank[rb]) begin
+                //     parent[ra] <= rb; // attach ra -> rb
+                //     // merge stats ra -> rb in next states
+                //     ua <= rb; ub <= ra; // reuse ua = winner, ub = loser
+                //     state <= S_UNION_MERGE_0;
+                // end else if (rank[ra] > rank[rb]) begin
+                //     parent[rb] <= ra; // attach rb -> ra
+                //     ua <= ra; ub <= rb;
+                //     state <= S_UNION_MERGE_0;
+                // end else begin
+                //     parent[rb] <= ra; // attach rb -> ra and bump rank
+                //     rank[ra] <= rank[ra] + 1;
+                //     ua <= ra; ub <= rb;
+                //     state <= S_UNION_MERGE_0;
+                // end
             end
 
             // UNION: merge stats ub -> ua (spread across clock cycles as now so that 
@@ -523,12 +579,14 @@ always @(posedge clk) begin
                 state <= S_LABEL_WRITE;
             end
 
-            // Write label to current pixel and add current pixel to stats
+            // Write not the label but the root directly to current pixel and add current pixel to stats
             S_LABEL_WRITE: begin
                 // Write label
                 case (toggle_line)
-                    0: row1_labels[x] <= R;
-                    1: row0_labels[x] <= R;
+                    // 0: row1_labels[x] <= R;
+                    // 1: row0_labels[x] <= R;
+                    0: row1_labels[x] <= ua;
+                    1: row0_labels[x] <= ua;
                 endcase
 
                 // Add pixel to stats of ua
