@@ -13,8 +13,6 @@ module VGA_Controller(
     output reg vga_vsync,
     output [16:0] frame_addr,    // BRAM address for 320x240 frame (doubled to 640x480)
     input [11:0] frame_pixel,
-    input bitmap_pixel,
-    input display_switch,
     output active_area
 );
 
@@ -39,19 +37,14 @@ module VGA_Controller(
 
     assign active_area = ~blank;
 
-    // ------------------------------------------------------------------
-    // Frame buffer layout (written by capture module):
-    //   Stored resolution: 320 x 240 (row-major, addr = y*320 + x)
-    // VGA outputs 640 x 480 by doubling pixels in both axes.
-    // We derive the 320x240 source coordinate by shifting counters.
-    // ------------------------------------------------------------------
+    // Calculate frame address from doubled coordinates
     localparam SRC_WIDTH  = 320;
     localparam SRC_HEIGHT = 240;
-    wire [8:0] src_y = vCounter[9:1]; // vCounter >> 1 (0..239)
-    wire [8:0] src_x = hCounter[9:1]; // hCounter >> 1 (0..319)
-    assign frame_addr = src_y * SRC_WIDTH + src_x; 
+    wire [8:0] src_y = vCounter[9:1]; // vCounter (0-479)  >> 1 (0..239)
+    wire [8:0] src_x = hCounter[9:1]; // hCounter (0..639) >> 1 (0..319)
+    assign frame_addr = src_y * 306 + src_x-14;     // i only want 306 right-side pixels
 
-    // Main synchronous process on clk25 (rising edge)
+
     always @(posedge clk25) begin
         // Count the horizontal and vertical positions
         if (hCounter == hMaxCount - 1) begin
@@ -66,23 +59,15 @@ module VGA_Controller(
         end
 
         // Pixel outputs (when not blank) - READ FROM BRAM
-        if (blank == 1'b0) begin
-            if (display_switch == 1'b0) begin
-                // Read from image BRAM
+        if (hCounter >= 30) begin
+            if (blank == 1'b0) begin
                 vga_red   <= frame_pixel[11:8];
                 vga_green <= frame_pixel[7:4];
                 vga_blue  <= frame_pixel[3:0];
             end else begin
-                // Read from bitmap BRAM
-                if (bitmap_pixel == 1'b1) begin
-                    vga_red   <= 4'b1111;
-                    vga_green <= 4'b1111;
-                    vga_blue  <= 4'b1111;
-                end else begin
-                    vga_red   <= 4'b0;
-                    vga_green <= 4'b0;
-                    vga_blue  <= 4'b0;
-                end
+                vga_red   <= 4'b0;
+                vga_green <= 4'b0;
+                vga_blue  <= 4'b0;
             end
         end else begin
             vga_red   <= 4'b0;
@@ -92,10 +77,10 @@ module VGA_Controller(
 
         // Frame addressing & blanking logic
         if (vCounter >= vRez) begin
-            blank   <= 1'b1;
+            blank <= 1'b1;
         end else begin
             if (hCounter < hRez) begin
-                blank   <= 1'b0;
+                blank <= 1'b0;
             end else begin
                 blank <= 1'b1;
             end

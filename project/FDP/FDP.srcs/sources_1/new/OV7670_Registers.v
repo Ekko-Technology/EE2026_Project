@@ -26,12 +26,12 @@ module OV7670_Registers(
 
         case (address)
             8'h00: sreg <= 16'h1280; // COM7   Reset
-            8'h01: sreg <= 16'h1280; // COM7   Reset
+            8'h01: sreg <= 16'h0000; // write random register to delay
             8'h02: sreg <= 16'h1204; // COM7   Size & RGB output
             8'h03: sreg <= 16'h1100; // CLKRC  Prescaler - Fin/(1+1)
             8'h04: sreg <= 16'h0C00; // COM3   Enable scaling
             8'h05: sreg <= 16'h3E00; // COM14  PCLK scaling off
-            8'h06: sreg <= 16'h8C00; // RGB444 Set RGB format
+            8'h06: sreg <= 16'h8C02; // RGB444 Set RGB format
             8'h07: sreg <= 16'h0400; // COM1   no CCIR601
             8'h08: sreg <= 16'h40F0; // COM15  Full 0-255 output, RGB 555
             8'h09: sreg <= 16'h3A04; // TSLB   UV ordering

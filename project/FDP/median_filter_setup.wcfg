@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="Capture_Median_tb_behav.wdb" id="1">
+         <top_modules>
+            <top_module name="Capture_Median_tb" />
+            <top_module name="glbl" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <zoom_setting>
+      <ZoomStartTime time="0fs"></ZoomStartTime>
+      <ZoomEndTime time="2366000001fs"></ZoomEndTime>
+      <Cursor1Time time="0fs"></Cursor1Time>
+   </zoom_setting>
+   <column_width_setting>
+      <NameColumnWidth column_width="175"></NameColumnWidth>
+      <ValueColumnWidth column_width="138"></ValueColumnWidth>
+   </column_width_setting>
+   <WVObjectSize size="12" />
+   <wave_markers>
+      <marker label="" time="409417000" />
+      <marker label="" time="150000000" />
+   </wave_markers>
+   <wvobject type="logic" fp_name="/Capture_Median_tb/pclk">
+      <obj_property name="ElementShortName">pclk</obj_property>
+      <obj_property name="ObjectShortName">pclk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/Capture_Median_tb/vsync">
+      <obj_property name="ElementShortName">vsync</obj_property>
+      <obj_property name="ObjectShortName">vsync</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/Capture_Median_tb/href">
+      <obj_property name="ElementShortName">href</obj_property>
+      <obj_property name="ObjectShortName">href</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_cap/cam_x">
+      <obj_property name="ElementShortName">cam_x[9:0]</obj_property>
+      <obj_property name="ObjectShortName">cam_x[9:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_cap/cam_y">
+      <obj_property name="ElementShortName">cam_y[8:0]</obj_property>
+      <obj_property name="ObjectShortName">cam_y[8:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_cap/d">
+      <obj_property name="ElementShortName">d[7:0]</obj_property>
+      <obj_property name="ObjectShortName">d[7:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_cap/addr">
+      <obj_property name="ElementShortName">addr[16:0]</obj_property>
+      <obj_property name="ObjectShortName">addr[16:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/Capture_Median_tb/we">
+      <obj_property name="ElementShortName">we</obj_property>
+      <obj_property name="ObjectShortName">we</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_cap/dout">
+      <obj_property name="ElementShortName">dout[11:0]</obj_property>
+      <obj_property name="ObjectShortName">dout[11:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_med/pixel_in">
+      <obj_property name="ElementShortName">pixel_in[11:0]</obj_property>
+      <obj_property name="ObjectShortName">pixel_in[11:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_med/addr_out">
+      <obj_property name="ElementShortName">addr_out[17:0]</obj_property>
+      <obj_property name="ObjectShortName">addr_out[17:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/Capture_Median_tb/u_med/pixel_out">
+      <obj_property name="ElementShortName">pixel_out[11:0]</obj_property>
+      <obj_property name="ObjectShortName">pixel_out[11:0]</obj_property>
+   </wvobject>
+</wave_config>
