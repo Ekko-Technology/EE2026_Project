@@ -80,6 +80,41 @@ module Top(
         .we(we)
     );
 
+    //----------- MEDIAN FILTER ----------- //
+    wire pixel_valid;
+    wire [11:0] filtered_pixel;
+    wire [17:0] filtered_addr;
+
+    Median_Filter #(
+        .KERNEL_SIZE(3),
+        .PIXEL_DEPTH(12),
+        .IMAGE_WIDTH(306),
+        .IMAGE_HEIGHT(240)
+    )
+    median_filter(
+        .clk(ov7670_pclk),
+        .reset(cap_reset),
+        .frame_start(ov7670_vsync),
+        .pixel_in(dout),
+        .we(we),
+        .pixel_out(filtered_pixel),
+        .addr_out(filtered_addr),
+        .pixel_valid(pixel_valid)
+    );
+
+    // Unified write controls for both RGB frame buffer and 1-bit bitmap buffer
+    // Share write enable and address; keep separate data for RGB (12-bit) and bitmap (1-bit)
+    reg        we_w;            // common write enable for both memories
+    reg [17:0] waddr18_r;       // common write address for both memories (absolute with base)
+    reg [11:0] rgb_dina_r;      // RGB data to image_mem
+    reg        bmp_dina_r;      // bitmap data to Dual_Port_Buffer
+    // Single pending entry for filtered overwrite (affects both memories)
+    reg        pend;            // pending filtered write
+    reg [17:0] pend_addr_q;     // absolute address for filtered center
+    reg [11:0] fpix_q;          // latched filtered RGB pixel
+    reg        bdin_q;          // latched filtered bitmap bit
+
+    
     //----------- PING PONG BUFFERS ----------- //
     //No hard guards or syncs now, both just triggering the BRAM upper/lower swap on Vsync
     //Seems to be working fine and no tears for now so f it we ball I guess
@@ -125,33 +160,74 @@ module Top(
     // Compute physical addresses into 2x frame BRAM (18-bit addressing)
     wire [17:0] wr_base = wr_sel ? FRAME_PIXELS : 18'd0;
     wire [17:0] rd_base = rd_sel ? FRAME_PIXELS : 18'd0;
-    wire [17:0] addra18 = {1'b0, addr} + wr_base;
     wire [17:0] addrb18 = {1'b0, frame_addr} + rd_base;
+
+    // PCLK-domain writer:
+    // - Image RGB: raw on we==1, filtered overwrite on we==0
+    // - Bitmap 1-bit: raw-threshold on we==1, filtered-threshold overwrite on we==0
+    always @(posedge ov7670_pclk) begin
+        if (cap_reset) begin
+            we_w <= 1'b0;
+            waddr18_r <= 18'd0;
+            rgb_dina_r <= 12'd0;
+            bmp_dina_r <= 1'b0;
+            pend <= 1'b0;
+            pend_addr_q <= 18'd0;
+            fpix_q <= 12'd0;
+            bdin_q <= 1'b0;
+        end else begin
+            we_w <= 1'b0; // default no write; assert exactly once per cycle below
+
+            // Latch a new filtered center write when available
+            if (sw[1] && we && pixel_valid) begin
+                pend <= 1'b1;
+                pend_addr_q <= filtered_addr + wr_base; // absolute address in the active write half
+                fpix_q <= filtered_pixel;
+                // bitmap bit from filtered pixel (same address as RGB)
+                bdin_q <= ((filtered_pixel[3:0]  >= 4'h9) && (filtered_pixel[3:0]  <= 4'hF) &&
+                           (filtered_pixel[7:4]  >= 4'h6) && (filtered_pixel[7:4]  <= 4'hF) &&
+                           (filtered_pixel[11:8] >= 4'h0) && (filtered_pixel[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
+            end
+
+            // On the non-pixel byte cycles (we==0), perform the pending filtered write
+            if (!we && pend) begin
+                waddr18_r  <= pend_addr_q;
+                rgb_dina_r <= fpix_q;
+                bmp_dina_r <= bdin_q;
+                we_w <= 1'b1;
+                pend <= 1'b0;
+            end
+
+            // On pixel-complete cycles (we==1), always write the RAW pixel to its address
+            if (we) begin
+                waddr18_r  <= {1'b0, addr} + wr_base;
+                rgb_dina_r <= dout;
+                bmp_dina_r <= ((dout[3:0]  >= 4'h8) && (dout[3:0]  <= 4'hF) &&
+                                   (dout[7:4]  >= 4'h6) && (dout[7:4]  <= 4'hF) &&
+                                   (dout[11:8] >= 4'h0) && (dout[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
+                we_w <= 1'b1;
+            end
+        end
+    end
 
     image_mem frame_buffer(
         .clka(ov7670_pclk),
-        .wea(we),
-        .addra(addra18),
-        .dina(dout),          // write RGB444
+        .wea(we_w),
+        .addra(waddr18_r),
+        .dina(rgb_dina_r),          // write RGB444 (raw on we cycles, filtered on alt cycles)
         .clkb(clk25),
         .addrb(addrb18),
         .doutb(image_pixel)   // read RGB444
     );
 
-    //----------- BITMAP BUFFER ----------- //
-    // Thresholding to create 1-bit bitmap from RGB444 input
+    //----------- BITMAP BUFFER (1-bit) ----------- //
     wire bitmap_pixel;
-    wire threshold_pixel;
-    assign threshold_pixel = ((dout[3:0] >= 4'hB) && (dout[3:0] <= 4'hF) && //Red
-                              (dout[7:4] >= 4'h6) && (dout[7:4] <= 4'hF) && //Green
-                              (dout[11:8] >= 4'h0) && (dout[11:8] <= 4'h4)) //Blue
-                              ? 1'b1 : 1'b0;
 
     Dual_Port_Buffer bitmap_buffer(
         .clka(ov7670_pclk),
-        .we(we),
-        .addra(addra18),
-        .dina(threshold_pixel), // write bitmap pixel
+        .we(we_w),
+        .addra(waddr18_r),
+        .dina(bmp_dina_r), // write bitmap pixel
         .clkb(clk25),
         .addrb(addrb18),
         .doutb(bitmap_pixel) // read bitmap pixel
