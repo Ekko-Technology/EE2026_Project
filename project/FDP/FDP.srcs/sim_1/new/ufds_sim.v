@@ -59,22 +59,43 @@ module ufds_sim(
     always #5 clk = ~clk;
 
     // Helpers
-    task drive_pixel(input v, input fs, input ls, input fe, input px);
+    task push_pixel(input fs, input ls, input px);
         begin
+            wait (dut.state == dut.S_READY);
             @(negedge clk);
-            in_valid    = v;
+            curr_pix    = px;
+            in_valid    = 1;
             frame_start = fs;
             line_start  = ls;
-            frame_end   = fe;
-            curr_pix    = px;
             @(posedge clk);
+            in_valid    = 0;
+            frame_start = 0;
+            frame_end   = 0;
+            line_start  = 0;
         end
     endtask
 
-
+    integer xi, yi;
     initial begin
 
 
+        // reset
+        repeat (4) @(posedge clk);
+        rst = 0;
+
+        // wait for init sweeps to complete
+        wait (dut.state == dut.S_READY);
+
+        // feed 3 lines of 8 pixels with a simple 2x3 block at (x=2..3,y=0..2)
+        for (yi=0; yi<3; yi=yi+1) begin
+            for (xi=0; xi<8; xi=xi+1) begin
+                push_pixel((yi==0 && xi==0), (xi==0), ((xi>=2 && xi<=3) ? 1:0));
+            end
+        end
+
+    end
+
+    /*
         // Reset
         repeat (3) @(posedge clk);
         rst = 0;
@@ -143,4 +164,5 @@ module ufds_sim(
         // After we add label assignment, we can extend this to check L against the label at x-1.
 
     end
+    */
 endmodule

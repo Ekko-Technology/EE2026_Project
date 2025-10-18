@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="ufds_sim_behav.wdb" id="1">
+         <top_modules>
+            <top_module name="glbl" />
+            <top_module name="ufds_sim" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <zoom_setting>
+      <ZoomStartTime time="43766000000fs"></ZoomStartTime>
+      <ZoomEndTime time="45074000001fs"></ZoomEndTime>
+      <Cursor1Time time="44741000000fs"></Cursor1Time>
+   </zoom_setting>
+   <column_width_setting>
+      <NameColumnWidth column_width="161"></NameColumnWidth>
+      <ValueColumnWidth column_width="129"></ValueColumnWidth>
+   </column_width_setting>
+   <WVObjectSize size="25" />
+   <wvobject fp_name="/ufds_sim/clk" type="logic">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/rst" type="logic">
+      <obj_property name="ElementShortName">rst</obj_property>
+      <obj_property name="ObjectShortName">rst</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/in_valid" type="logic">
+      <obj_property name="ElementShortName">in_valid</obj_property>
+      <obj_property name="ObjectShortName">in_valid</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/frame_start" type="logic">
+      <obj_property name="ElementShortName">frame_start</obj_property>
+      <obj_property name="ObjectShortName">frame_start</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/line_start" type="logic">
+      <obj_property name="ElementShortName">line_start</obj_property>
+      <obj_property name="ObjectShortName">line_start</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/frame_end" type="logic">
+      <obj_property name="ElementShortName">frame_end</obj_property>
+      <obj_property name="ObjectShortName">frame_end</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/curr_pix" type="logic">
+      <obj_property name="ElementShortName">curr_pix</obj_property>
+      <obj_property name="ObjectShortName">curr_pix</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/bbox_left" type="array">
+      <obj_property name="ElementShortName">bbox_left[8:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_left[8:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/bbox_right" type="array">
+      <obj_property name="ElementShortName">bbox_right[8:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_right[8:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/centroid_x" type="array">
+      <obj_property name="ElementShortName">centroid_x[8:0]</obj_property>
+      <obj_property name="ObjectShortName">centroid_x[8:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/bbox_top" type="array">
+      <obj_property name="ElementShortName">bbox_top[7:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_top[7:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/bbox_bottom" type="array">
+      <obj_property name="ElementShortName">bbox_bottom[7:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_bottom[7:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/centroid_y" type="array">
+      <obj_property name="ElementShortName">centroid_y[7:0]</obj_property>
+      <obj_property name="ObjectShortName">centroid_y[7:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/xi" type="array">
+      <obj_property name="ElementShortName">xi[31:0]</obj_property>
+      <obj_property name="ObjectShortName">xi[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/yi" type="array">
+      <obj_property name="ElementShortName">yi[31:0]</obj_property>
+      <obj_property name="ObjectShortName">yi[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/x" type="array">
+      <obj_property name="ElementShortName">x[8:0]</obj_property>
+      <obj_property name="ObjectShortName">x[8:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/y" type="array">
+      <obj_property name="ElementShortName">y[7:0]</obj_property>
+      <obj_property name="ObjectShortName">y[7:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/state" type="array">
+      <obj_property name="ElementShortName">state[4:0]</obj_property>
+      <obj_property name="ObjectShortName">state[4:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/toggle_line" type="logic">
+      <obj_property name="ElementShortName">toggle_line</obj_property>
+      <obj_property name="ObjectShortName">toggle_line</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/left" type="array">
+      <obj_property name="ElementShortName">left[11:0]</obj_property>
+      <obj_property name="ObjectShortName">left[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/up" type="array">
+      <obj_property name="ElementShortName">up[11:0]</obj_property>
+      <obj_property name="ObjectShortName">up[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/upleft" type="array">
+      <obj_property name="ElementShortName">upleft[11:0]</obj_property>
+      <obj_property name="ObjectShortName">upleft[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/upright" type="array">
+      <obj_property name="ElementShortName">upright[11:0]</obj_property>
+      <obj_property name="ObjectShortName">upright[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/row0_labels" type="array">
+      <obj_property name="ElementShortName">row0_labels[0:319][11:0]</obj_property>
+      <obj_property name="ObjectShortName">row0_labels[0:319][11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/ufds_sim/dut/row1_labels" type="array">
+      <obj_property name="ElementShortName">row1_labels[0:319][11:0]</obj_property>
+      <obj_property name="ObjectShortName">row1_labels[0:319][11:0]</obj_property>
+   </wvobject>
+</wave_config>

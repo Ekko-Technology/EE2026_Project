@@ -1,10 +1,10 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Inspirations taken from AprilTagv1.0, AprilTagv2.0, Suzuki-Abe
-// AND from CS2040C for the Union Find Disjoint Set algorithm  
-// I have decided to use weighted quick-union (weight is size of the connected component) for space and time complexity
+// AND from CS2040C for the Union Find Disjoint Set algorithm and use of rank.
+// I have decided to use weighted quick-union (use rank of the root, refer to Augmented Balanced BSTs) for space and time complexity
 // - find: follow parent "pointers" to the root. same root == same ID
-// - Union: Attach the smaller tree to the larger (by size) and merge the stats we stored
+// - Union: Attach the smaller tree to the larger (by rank of root) and merge the stats we stored
 // quick-find didnt seem right coz we need to scan and rewrite the entire componentID array every union() call == slow and resource heavy 
 // made it weighted so that find is faster (shorter tree height) - O(log n) for both find and union
 // path compression i give up and idt we need for now?
@@ -20,6 +20,11 @@
 //
 // Personal implementation of a connceted-component labelling using UFDS
 // labels here refers to the component ID that we know (shorter name lol)
+//
+// all variables i used registers
+// these reg are now always accessible so dont need to pass as args to functions
+// logic of the whole union-find is implemented as a whole FSM style
+// Using each state to mimic a function in C++
 //////////////////////////////////////////////////////////////////////////////////
 
 
@@ -67,251 +72,777 @@ reg [label_bits-1:0] row0_labels[0:WIDTH-1];
 reg [label_bits-1:0] row1_labels[0:WIDTH-1];
 reg toggle_line; // 0: prev=buff0, curr=buff1; 1: prev=buff1, curr=buff0
 
-/* 
- * helpers to get neighbour's labels of current x (since no pointers), no need y
- */
-reg [label_bits-1:0] L, UL, U, UR; // reduced neighbour set
-
-function [label_bits-1:0] label_top(input [x_bitsize-1:0] x);
-    if (y == 0) begin
-        label_top = 0; // first line has no previous line
-    end else begin
-        label_top = toggle_line ? row1_labels[x] : row0_labels[x]; 
-    end
-endfunction
-
-function [label_bits-1:0] label_top_left(input [x_bitsize-1:0] x);
-    if (y == 0 || x == 0) begin
-        label_top_left = 0; // first line or first pixel has no previous line or left pixel
-    end else begin
-        label_top_left = toggle_line ? row1_labels[x-1] : row0_labels[x-1]; 
-    end
-endfunction
-
-function [label_bits-1:0] label_top_right(input [x_bitsize-1:0] x);
-    if (y == 0 || x == WIDTH-1) begin
-        label_top_right = 0; // first line or last pixel has no previous line or right pixel
-    end else begin
-        label_top_right = toggle_line ? row1_labels[x+1] : row0_labels[x+1]; 
-    end
-endfunction
-
-function [label_bits-1:0] label_curr_left(input [x_bitsize-1:0] x);
-    if (y == 0 || x == 0) begin
-        label_curr_left = 0; // first line or first pixel has no previous line or left pixel
-    end else begin
-        label_curr_left = toggle_line ? row1_labels[x-1] : row0_labels[x-1]; 
-    end
-endfunction
-
-// helper union() which is to replace sets containing p and q with their union
-task set_curr_label(input [x_bitsize-1:0] x, input [label_bits-1:0] L);
-    begin
-        if (toggle_line) begin
-            row0_labels[x] <= L;
-        end else begin
-            row1_labels[x] <= L;
-        end
-    end
-endtask
-
 /*
  * Quick-Union Disjoint Set ADT implementation (specifically weighted union) 
  * and the stats to store for each label
  */
 localparam integer MAX_LABELS = 4096; // can reduce if dont need this many labels
-localparam integer FIND_MAX_ITERATIONS = 4; // to prevent infinite loop in find, since loops in functions are combinational. Height of tree is O(log n) = 4
+localparam integer FIND_MAX_ITERATIONS = 8; // to prevent infinite loop in find, since loops in functions are combinational. Height of tree is O(log n) = 4
 
 reg [label_bits-1:0] parent [0:MAX_LABELS-1]; // C++ eq: vector<int> parent (MAX_LABELS);
-reg [3:0] weight [0:MAX_LABELS-1]; // C++ eq: vector<int> weight (MAX_LABELS); 
-reg active_root [0:MAX_LABELS-1]; // to mark if this label is active (used) or not
+reg [3:0] rank [0:MAX_LABELS-1]; // C++ eq: vector<int> rank (MAX_LABELS); 
+reg active_root [0:MAX_LABELS-1]; // boolean array marking whether a component ID is in use as a root
 reg [label_bits-1:0] next_label; // next unused label n0.
 
 // stats for each component (hence only store for root pixel, where parent[label] == label)
 reg [23:0] area [0:MAX_LABELS-1]; // number of pixels in this component
 reg [31:0] sum_x [0:MAX_LABELS-1]; // sum of x coordinates of pixels in this component
-reg [23:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
+reg [31:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
 reg [x_bitsize-1:0] min_x [0:MAX_LABELS-1]; 
 reg [x_bitsize-1:0] max_x [0:MAX_LABELS-1]; 
 reg [y_bitsize-1:0] min_y [0:MAX_LABELS-1]; 
 reg [y_bitsize-1:0] max_y [0:MAX_LABELS-1]; 
 
 
-// C++ eq: find(root of a) by following parent[]; bounded to keep logic small
-function [label_bits-1:0] uf_find(input [label_bits-1:0] a);
-    reg [label_bits-1:0] r;
-    integer k;
-    begin
-        r = a;
-        if (r == 0) begin uf_find = 0; end
-        else begin
-            for (k = 0; k < FIND_MAX_ITERS; k = k + 1) begin
-                if (parent[r] == r) begin uf_find = r; disable for; end
-                r = parent[r];
-            end
-            uf_find = r; // fallback if loop cap hit
-        end
-    end
-endfunction
+// retrieve the reduced neighbour pixel's labels 
+wire [label_bits-1:0] left_label = (x == 0) ? 0 : 
+                                   (toggle_line == 0) ? row1_labels[x-1] : row0_labels[x-1];
+wire [label_bits-1:0] up_label = (y == 0) ? 0 : 
+                                   (toggle_line == 0) ? row0_labels[x] : row1_labels[x];
+wire [label_bits-1:0] upleft_label = (x == 0 || y == 0) ? 0 : 
+                                   (toggle_line == 0) ? row0_labels[x-1] : row1_labels[x-1];
+wire [label_bits-1:0] upright_label = (x == WIDTH-1 || y == 0) ? 0 : 
+                                   (toggle_line == 0) ? row0_labels[x+1] : row1_labels[x+1];
 
-// C++: union by rank; attach smaller tree, update rank, merge stats rb -> ra
-task merge_stats(input [label_bits-1:0] ra, input [label_bits-1:0] rb);
-    begin
-        area[ra] <= area[ra] + area[rb];
-        sumx[ra] <= sumx[ra] + sumx[rb];
-        sumy[ra] <= sumy[ra] + sumy[rb];
-        if (minx[rb] < minx[ra]) minx[ra] <= minx[rb];
-        if (miny[rb] < miny[ra]) miny[ra] <= miny[rb];
-        if (maxx[rb] > maxx[ra]) maxx[ra] <= maxx[rb];
-        if (maxy[rb] > maxy[ra]) maxy[ra] <= maxy[rb];
-        active[rb] <= 1'b0;
-        area[rb] <= 0; sumx[rb] <= 0; sumy[rb] <= 0;
-        minx[rb] <= {x_bitsize{1'b1}}; miny[rb] <= {y_bitsize{1'b1}};
-        maxx[rb] <= 0; maxy[rb] <= 0;
-    end
-endtask
+// temporary registers to read and write neighbour labels
+reg [label_bits-1:0] left;
+reg [label_bits-1:0] up;
+reg [label_bits-1:0] upleft;
+reg [label_bits-1:0] upright;
+reg [label_bits-1:0] root_left;
+reg [label_bits-1:0] root_up;
+reg [label_bits-1:0] root_upleft;
+reg [label_bits-1:0] root_upright;
+reg [label_bits-1:0] R; // final root label for current pixel
 
-task uf_union(input [label_bits-1:0] a, input [label_bits-1:0] b);
-    reg [label_bits-1:0] ra, rb;
-    begin
-        if (a==0 || b==0) disable uf_union;
-        ra = uf_find(a); rb = uf_find(b);
-        if (ra == rb) disable uf_union;
-        if (rank_[ra] < rank_[rb]) begin
-            parent[ra] <= rb; merge_stats(rb, ra);
-        end else if (rank_[ra] > rank_[rb]) begin
-            parent[rb] <= ra; merge_stats(ra, rb);
-        end else begin
-            parent[rb] <= ra; rank_[ra] <= rank_[ra] + 1'b1; merge_stats(ra, rb);
-        end
-    end
-endtask
+// temporary counters to help me walk along the width and labels during a sweep, to not touch global ref for x coord 
+reg [x_bitsize-1:0] init_width_idx;
+reg [label_bits-1:0] init_label_idx;
 
-task init_label(input [label_bits-1:0] L);
-    begin
-        parent[L] <= L; rank_[L] <= 0; active[L] <= 1'b1;
-        area[L] <= 0; sumx[L] <= 0; sumy[L] <= 0;
-        minx[L] <= {x_bitsize{1'b1}}; miny[L] <= {y_bitsize{1'b1}};
-        maxx[L] <= 0; maxy[L] <= 0;
-    end
-endtask
+// temporary registers to help in find() aka the find engine
+reg [label_bits-1:0] find_curr; // used in S_FIND_* states to follow parents to find root of component iteratively
 
-task add_pixel_to_root(input [label_bits-1:0] R);
-    begin
-        area[R] <= area[R] + 1;
-        sumx[R] <= sumx[R] + x;
-        sumy[R] <= sumy[R] + y;
-        if (x < minx[R]) minx[R] <= x; if (x > maxx[R]) maxx[R] <= x;
-        if (y < miny[R]) miny[R] <= y; if (y > maxy[R]) maxy[R] <= y;
-    end
-endtask
+// temporary registers to help in union() aka the union engine (which uses find engine twice, then attach and merge stats)
+reg [label_bits-1:0] ua, ub; // inputs
+reg [label_bits-1:0] ra, rb; // roots
+
+wire [label_bits-1:0] parent_curr = parent[find_curr];
+// wire [label_bits-1:0] rootR_now = (parent[R]==R) ? R : parent[R]; // root of R now (after a union)
+
+// // FIFO wires
+// wire [3:0] fifo_dout;
+// reg fifo_rd_en;
+// reg fs_q;
+// reg ls_q;
+// reg fe_q;
+// reg px_q;
+
+// FIFO_UDFS in_fifo (
+//     .clk(clk),
+//     .rst(ext_reset),
+//     .wr_en(in_valid),
+//     .wr_data({frame_start, line_start, frame_end, curr_pix}),
+//     .rd_en(fifo_rd_en),
+//     .rd_data(fifo_dout),
+//     );
+
+// FSM encoding
+reg [4:0] state;
+localparam S_RESET = 0;
+localparam S_INIT_LINES = 1;
+localparam S_INIT_UFDS = 2;
+localparam S_READY = 3;
+localparam S_SAMPLE = 4;
+localparam S_FIND_L = 5;
+localparam S_FIND_L_RD = 6;
+localparam S_FIND_U = 7;
+localparam S_FIND_U_RD = 8;
+localparam S_FIND_UL = 9;
+localparam S_FIND_UL_RD = 10;
+localparam S_FIND_UR = 11;
+localparam S_FIND_UR_RD = 12;
+localparam S_CHOOSE = 13;
+localparam S_ALLOC = 14;
+localparam S_UNION_DECIDE = 15;
+localparam S_UNION_FIND_A = 16;
+// localparam S_UNION_FIND_A_RD = 17;
+localparam S_UNION_FIND_B = 18;
+// localparam S_UNION_FIND_B_RD = 19;
+localparam S_UNION_ATTACH = 20;
+localparam S_UNION_MERGE_0 = 21;
+localparam S_UNION_MERGE_1 = 22;
+localparam S_UNION_MERGE_2 = 23;
+localparam S_UNION_MERGE_3 = 24;
+localparam S_LABEL_WRITE = 25;
+localparam S_ADVANCE = 26;
+
 
 /*
- * run-time main-loop by per-pixel UFDS sequence
+ * main FSM by per-pixel UFDS sequence
  */
-integer i; // used for iterations of for loops later
 always @(posedge clk) begin
     if (ext_reset) begin
         x <= 0; y <= 0; toggle_line <= 0;
         bbox_left <= 0; bbox_right <= 0; bbox_top <= 0; bbox_bottom <= 0; centroid_x <= 0; centroid_y <= 0;
-        for (i = 0; i < WIDTH; i = i + 1) begin
-            row0_labels[i] <= 0;
-            row1_labels[i] <= 0;
-        end
-        //out_valid <= 1'b0;
-    end else begin
-        // new frame: reset coordinates and clear both line buffers
-        if (frame_start) begin
-            x <= 0; y <= 0; toggle_line <= 0;
-            for (i = 0; i < WIDTH; i = i + 1) begin
-                row0_labels[i] <= 0;
-                row1_labels[i] <= 0;
-            end
-        end 
         
-        // new line except first pixel of a frame
-        if (line_start && !frame_start) begin
-            // reset x, increment y, toggle line buffers
+        init_width_idx <= 0;
+        init_label_idx <= 0;
+        next_label <= 1;
+
+        find_curr <= 0;
+        ua<=0; ub<=0; ra<=0; rb<=0;
+
+        state <= S_INIT_LINES; // and later S_INIT_UFDS
+
+    end else begin
+        // Handle external frame/line strobes for coordinates and toggling
+        if (frame_start) begin
+            x <= 0;
+            y <= 0;
+            toggle_line <= 1'b0;
+            // restart init on new frame
+            // state <= S_INIT_LINES;
+            // init_width_idx <= 0;
+            // init_label_idx <= 0;
+            next_label <= 1;
+            state <= S_READY;
+        end else if (line_start && state==S_READY) begin
             x <= 0;
             y <= y + 1;
             toggle_line <= ~toggle_line;
-        end 
-        
-        if (in_valid) begin
-            // during active pixels
-            // get reduced neighbour labels
-            L  = label_curr_left(x);
-            UL = label_top_left(x);
-            U  = label_top(x);
-            UR = label_top_right(x);
-
-            if (!curr_pix) begin
-                set_curr_label(x, 0); // background pixel, label = 0
-            end else begin
-                // 1. map neighbours to current roots
-                reg [label_bits-1:0] R_left;
-                reg [label_bits-1:0] R_up;
-                reg [label_bits-1:0] R_ul;
-                reg [label_bits-1:0] R_ur;
-                reg [label_bits-1:0] R;
-                R_left = (L  != 0) ? uf_find(L)  : 0;
-                R_up   = (U  != 0) ? uf_find(U)  : 0;
-                R_ul   = (UL != 0) ? uf_find(UL) : 0;
-                R_ur   = (UR != 0) ? uf_find(UR) : 0;
-
-                /// 2. Choose representative: smallest non-zero root label
-                R = 0;
-                if (R_left) begin
-                    R = R_left;
-                end
-                if (R_up && (R == 0 || R_up < R)) begin
-                    R = R_up;
-                end
-                if (R_ul && (R == 0 || R_ul < R)) begin
-                    R = R_ul;
-                end
-                if (R_ur && (R == 0 || R_ur < R)) begin
-                    R = R_ur;
-                end
-
-                // 3. If no neighbours, new label
-                if (R == 0) begin
-                    R <= next_label;
-                    init_label(next_label);
-                    active[next_label] <= 1'b1;
-                    parent[next_label] <= next_label;
-                    if (next_label != MAX_LABELS - 1) begin
-                        next_label <= next_label + 1'b1;
-                    end
-                end
-
-                // 4. Union with any neighbour roots that are different
-                if (R_left != 0 && R_left != R) begin
-                    uf_union(R, R_left);
-                end
-                if (R_up != 0 && R_up != R) begin
-                    uf_union(R, R_up);
-                end
-                if (R_ul != 0 && R_ul != R) begin
-                    uf_union(R, R_ul);
-                end
-                if (R_ur != 0 && R_ur != R) begin
-                    uf_union(R, R_ur);
-                end
-
-                // 5. Final root and update
-                R = uf_find(R);
-                set_curr_label(x, R);
-                add_pixel_to_root(R);
-            end
-
-            // increment x within the line (reminder y is handled at the start)
-            x <= x + 1;
         end
 
-        // frame_end here: outputs to be computed
-        // if (frame_end) out_valid <= 1;
+        case (state)
+            // clear the two line buffers (// for (i = 0; i < WIDTH; i = i + 1) begin
+                                           //             row0_labels[i] <= 0;
+                                           //             row1_labels[i] <= 0;
+                                           //         end)
+            S_INIT_LINES: begin
+                row0_labels[init_width_idx] <= 0;
+                row1_labels[init_width_idx] <= 0;
+                if (init_width_idx == WIDTH-1) begin
+                    init_width_idx <= 0;
+                    state <= S_INIT_UFDS; // clear UFDS values next
+                end else begin
+                    init_width_idx <= init_width_idx + 1;
+                end
+            end
+
+            // clear UFDS related stats
+            S_INIT_UFDS: begin
+                parent[init_label_idx] <= init_label_idx[label_bits-1:0];
+                rank[init_label_idx] <= 0;
+                active_root[init_label_idx] <= 0;
+                area[init_label_idx] <= 0;
+                sum_x[init_label_idx] <= 0;
+                sum_y[init_label_idx] <= 0;
+                min_x[init_label_idx] <= {x_bitsize{1'b1}}; // mins high
+                min_y[init_label_idx] <= {y_bitsize{1'b1}};
+                max_x[init_label_idx] <= 0; // max low
+                max_y[init_label_idx] <= 0;
+                if (init_label_idx == MAX_LABELS-1) begin
+                    init_label_idx <= 0;
+                    state <= S_READY;
+                end else begin
+                    init_label_idx <= init_label_idx + 1;
+                end
+            end
+
+            // ready to accept a new pixel and start the whole UFDS process
+            S_READY: begin
+                // if (in_valid) begin
+                    // sample provisional neighbor labels
+                    left <= left_label;
+                    up <= up_label;
+                    upleft <= upleft_label;
+                    upright <= upright_label;
+
+                    state <= S_SAMPLE;
+                // end
+            end
+
+            S_SAMPLE: begin
+                if (!curr_pix) begin
+                    // 0 means label 0 which rep background
+                    case (toggle_line)
+                        0: row1_labels[x] <= 0;
+                        1: row0_labels[x] <= 0;
+                    endcase
+                    state <= S_ADVANCE;
+                end else begin
+                    if (x == 0) begin
+                        if (y == 0) begin
+                            state <= S_CHOOSE; // first pixel of whole frame
+                        end else begin
+                            state <= S_FIND_U; // no left neighbour
+                        end
+                    end else begin
+                        state <= S_FIND_L; // begin find on left neighbor
+                    end
+                end
+            end
+
+            // find(L)
+            S_FIND_L: begin
+                if (left != 0) begin
+                    find_curr <= left; 
+                    state <= S_FIND_L_RD;
+                end else begin
+                    root_left <= 0;
+                    state <= S_FIND_U; // skip to next neighbor
+                end
+            end
+            S_FIND_L_RD: begin
+                // one hop per cycle
+                if (parent_curr == find_curr) begin // root iff parent[curr] == curr
+                    root_left <= find_curr;
+                    state <= S_FIND_U; // go to next neighbor
+                end else begin
+                    find_curr <= parent_curr;
+                end
+            end
+
+            // find(U)
+            S_FIND_U: begin
+                if (up != 0) begin
+                    find_curr <= up;
+                    state <= S_FIND_U_RD;
+                end else begin
+                    root_up <= 0;
+                    state <= S_FIND_UL; // skip to next neighbour
+                end
+            end
+            S_FIND_U_RD: begin
+                if (parent_curr == find_curr) begin
+                    root_up <= find_curr;
+                    state <= S_FIND_UL;
+                end else begin
+                    find_curr <= parent_curr;
+                end
+            end
+
+            // find(UL)
+            S_FIND_UL: begin
+                if (upleft != 0) begin
+                    find_curr <= upleft;
+                    state <= S_FIND_UL_RD;
+                end else begin
+                    root_upleft <= 0;
+                    state <= S_FIND_UR;
+                end
+            end
+            S_FIND_UL_RD: begin
+                if (parent_curr == find_curr) begin
+                    root_upleft <= find_curr;
+                    state <= S_FIND_UR;
+                end else begin
+                    find_curr <= parent_curr;
+                end
+            end
+
+            // find(UR)
+            S_FIND_UR: begin
+                if (upright != 0) begin
+                    find_curr <= upright;
+                    state <= S_FIND_UR_RD;
+                end else begin
+                    root_upright <= 0;
+                    state <= S_CHOOSE;
+                end
+            end
+            S_FIND_UR_RD: begin
+                if (parent_curr == find_curr) begin
+                    root_upright <= find_curr;
+                    state <= S_CHOOSE;
+                end else begin
+                    find_curr <= parent_curr;
+                end
+            end
+
+            // choose representative for current pixel (smallest non-zero root of all 4 neighbours)
+            S_CHOOSE: begin
+                R <= 0;
+                if (root_left != 0) begin
+                    R <= root_left;
+                end
+                if (root_up != 0 && (R == 0 || root_up < R)) begin
+                    R <= root_up;
+                end
+                if (root_upleft != 0 && (R == 0 || root_upleft < R)) begin
+                    R <= root_upleft;
+                end
+                if (root_upright != 0 && (R == 0 || root_upright < R)) begin
+                    R <= root_upright;
+                end
+
+                if ((root_left | root_up | root_upleft | root_upright) == 0) begin
+                    state <= S_ALLOC;
+                end else begin
+                    state <= S_UNION_DECIDE;
+                end
+            end
+
+            // allocate new label if all 4 neighbours are background (new component found)
+            S_ALLOC: begin
+                R <= next_label;
+                ua <= next_label; // ensure use this temp pointer to update stats
+
+                // update the stats of this root of a new component to that of only 1 pixel in component
+                parent[next_label] <= next_label;
+                rank[next_label] <= 0;
+                active_root[next_label] <= 1; // this new componentID/label is now used
+                area[next_label] <= 0;
+                sum_x[next_label] <= 0;
+                sum_y[next_label] <= 0;
+                min_x[next_label] <= {x_bitsize{1'b1}};
+                min_y[next_label] <= {y_bitsize{1'b1}};
+                max_x[next_label] <= {x_bitsize{1'b0}};
+                max_y[next_label] <= {y_bitsize{1'b0}};
+
+                if (next_label != MAX_LABELS-1)
+                    next_label <= next_label + 1;
+
+                state <= S_LABEL_WRITE;
+            end
+
+            // pick at most one neighbor to union with (priority L > U > UL > UR)
+            S_UNION_DECIDE: begin
+                ua <= R;
+                if (root_left != 0 && root_left != R) begin 
+                    ub <= root_left; 
+                    state <= S_UNION_FIND_A; 
+                end
+                else if (root_up != 0 && root_up != R) begin 
+                    ub <= root_up; 
+                    state <= S_UNION_FIND_A; 
+                end
+                else if (root_upleft != 0 && root_upleft != R) begin 
+                    ub <= root_upleft; 
+                    state <= S_UNION_FIND_A; 
+                end
+                else if (root_upright != 0 && root_upright != R) begin 
+                    ub <= root_upright; 
+                    state <= S_UNION_FIND_A; 
+                end else begin
+                    state <= S_LABEL_WRITE; // nothing to union
+                end
+            end
+
+            /*
+             * union(int p, int q) {
+             *     while (parent[p] !=p) p = parent[p]; // WEIGHTED UNION part 1
+             *     while (parent[q] !=q) q = parent[q]; // WEIGHTED UNION part 2
+             *     // WEIGHTED UNION part 3: attach lower-size under higher-size
+             *     if (size[p] > size[q] {
+             *         parent[q] = p;   // Link q to p
+             *         size[p] = size[p] + size[q];
+             *     } else {
+             *         parent[p] = q; // Link p to q
+             *         size[q] = size[p] + size[q];
+             *     }
+             * }
+             */
+             
+            // WEIGHTED UNION part 1: find(ua) - find root of ua
+            S_UNION_FIND_A: begin
+                if (parent[ua] == ua) begin
+                    ra <= ua;
+                    state <= S_UNION_FIND_B;
+                end else begin
+                    ua <= parent[ua];
+                end
+            end
+
+            // WEIGHTED UNION part 2: find(ub) - find root of ub
+            S_UNION_FIND_B: begin
+                if (parent[ub] == ub) begin
+                    rb <= ub;
+                    state <= S_UNION_ATTACH;
+                end else begin
+                    ub <= parent[ub];
+                end
+            end
+
+            // WEIGHTED UNION part 3: attach lower-rank under higher-rank (and bump rank on tie)
+            S_UNION_ATTACH: begin
+                if (ra == rb) begin // i can assert this is unreachable but i will leave it in for explicity
+                    state <= S_LABEL_WRITE; // nothing to do
+                end else if (rank[ra] < rank[rb]) begin
+                    parent[ra] <= rb; // attach ra -> rb
+                    // merge stats ra -> rb in next states
+                    ua <= rb; ub <= ra; // reuse ua = winner, ub = loser
+                    state <= S_UNION_MERGE_0;
+                end else if (rank[ra] > rank[rb]) begin
+                    parent[rb] <= ra; // attach rb -> ra
+                    ua <= ra; ub <= rb;
+                    state <= S_UNION_MERGE_0;
+                end else begin
+                    parent[rb] <= ra; // attach rb -> ra and bump rank
+                    rank[ra] <= rank[ra] + 1;
+                    ua <= ra; ub <= rb;
+                    state <= S_UNION_MERGE_0;
+                end
+            end
+
+            // UNION: merge stats ub -> ua (spread across clock cycles as now so that 
+            // can finish within 1 clock cycle. May be a problem need to test)
+            S_UNION_MERGE_0: begin
+                area[ua] <= area[ua] + area[ub];
+                sum_x[ua] <= sum_x[ua] + sum_x[ub];
+                sum_y[ua] <= sum_y[ua] + sum_y[ub];
+                active_root[ub] <= 0; // ub is no longer a root after union-ed
+                state <= S_UNION_MERGE_1;
+            end
+            S_UNION_MERGE_1: begin
+                if (min_x[ub] < min_x[ua]) begin
+                    min_x[ua] <= min_x[ub];
+                end
+                if (min_y[ub] < min_y[ua]) begin
+                    min_y[ua] <= min_y[ub];
+                end
+                state <= S_UNION_MERGE_2;
+            end
+            S_UNION_MERGE_2: begin
+                if (max_x[ub] > max_x[ua]) begin
+                    max_x[ua] <= max_x[ub];
+                end
+                if (max_y[ub] > max_y[ua]) begin
+                    max_y[ua] <= max_y[ub];
+                end
+                state <= S_UNION_MERGE_3;
+            end
+            S_UNION_MERGE_3: begin
+                // clear loser root's stats
+                area[ub] <= 0; 
+                sum_x[ub] <= 0; 
+                sum_y[ub] <= 0;
+                min_x[ub] <= {x_bitsize{1'b1}}; 
+                min_y[ub] <= {y_bitsize{1'b1}};
+                max_x[ub] <= 0; 
+                max_y[ub] <= 0;
+                state <= S_LABEL_WRITE;
+            end
+
+            // Write label to current pixel and add current pixel to stats
+            S_LABEL_WRITE: begin
+                // Write label
+                case (toggle_line)
+                    0: row1_labels[x] <= R;
+                    1: row0_labels[x] <= R;
+                endcase
+
+                // Add pixel to stats of ua
+                area[ua] <= area[ua] + 1;
+                sum_x[ua] <= sum_x[ua] + x;
+                sum_y[ua] <= sum_y[ua] + y;
+                if (x < min_x[ua]) begin
+                    min_x[ua] <= x;
+                end
+                if (x > max_x[ua]) begin
+                    max_x[ua] <= x;
+                end
+                if (y < min_y[ua]) begin
+                    min_y[ua] <= y;
+                end
+                if (y > max_y[ua]) begin
+                    max_y[ua] <= y;
+                end
+
+                state <= S_ADVANCE;
+            end
+
+            // Advance x; y/toggle handled by external line_start (already toggled in READY)
+            S_ADVANCE: begin
+                x <= x + 1;
+                state <= S_READY;
+            end
+
+            default: state <= S_READY;
+            endcase
+        end
     end
-end
-    
 endmodule
+
+// function [label_bits-1:0] label_top(input [x_bitsize-1:0] x);
+//     if (y == 0) begin
+//         label_top = 0; // first line has no previous line
+//     end else begin
+//         label_top = toggle_line ? row1_labels[x] : row0_labels[x];
+//     end
+// endfunction
+
+// function [label_bits-1:0] label_top_left(input [x_bitsize-1:0] x);
+//     if (y == 0 || x == 0) begin
+//         label_top_left = 0; // first line or first pixel has no previous line or left pixel
+//     end else begin
+//         label_top_left = toggle_line ? row1_labels[x-1] : row0_labels[x-1];
+//     end
+// endfunction
+
+// function [label_bits-1:0] label_top_right(input [x_bitsize-1:0] x);
+//     if (y == 0 || x == WIDTH-1) begin
+//         label_top_right = 0; // first line or last pixel has no previous line or right pixel
+//     end else begin
+//         label_top_right = toggle_line ? row1_labels[x+1] : row0_labels[x+1];
+//     end
+// endfunction
+  
+// function [label_bits-1:0] label_curr_left(input [x_bitsize-1:0] x);
+//     if (y == 0 || x == 0) begin
+//         label_curr_left = 0; // first line or first pixel has no previous line or left pixel
+//     end else begin
+//         label_curr_left = toggle_line ? row0_labels[x-1] : row1_labels[x-1];
+//     end
+// endfunction
+
+// // helper union() which is to replace sets containing p and q with their union
+// task set_curr_label(input [x_bitsize-1:0] x, input [label_bits-1:0] L);
+//     begin
+//         if (toggle_line) begin
+//             row0_labels[x] <= L;
+//         end else begin
+//             row1_labels[x] <= L;
+//         end
+//     end
+// endtask
+
+// // C++ eq: follow parents to find root of component
+// function [label_bits-1:0] uf_find(input [label_bits-1:0] a);
+//     reg [label_bits-1:0] r;
+//     integer k;
+//     begin
+//         r = a;
+//         if (r == 0) begin uf_find = 0; end
+//         else begin
+//             for (k = 0; k < FIND_MAX_ITERS; k = k + 1) begin
+//                 if (parent[r] == r) begin uf_find = r; end
+//                 r = parent[r];
+//             end
+//             uf_find = r; // fallback if loop cap hit
+//         end
+//     end
+// endfunction
+
+
+// // C++: union by rank; attach smaller tree, update rank, merge stats rb -> ra
+// task merge_stats(input [label_bits-1:0] ra, input [label_bits-1:0] rb);
+//     begin
+//         area[ra] <= area[ra] + area[rb];
+//         sumx[ra] <= sumx[ra] + sumx[rb];
+//         sumy[ra] <= sumy[ra] + sumy[rb];
+//         if (minx[rb] < minx[ra]) minx[ra] <= minx[rb];
+//         if (miny[rb] < miny[ra]) miny[ra] <= miny[rb];
+//         if (maxx[rb] > maxx[ra]) maxx[ra] <= maxx[rb];
+//         if (maxy[rb] > maxy[ra]) maxy[ra] <= maxy[rb];
+//         active[rb] <= 1'b0;
+//         area[rb] <= 0; sumx[rb] <= 0; sumy[rb] <= 0;
+//         minx[rb] <= {x_bitsize{1'b1}}; miny[rb] <= {y_bitsize{1'b1}};
+//         maxx[rb] <= 0; maxy[rb] <= 0;
+//     end
+// endtask
+
+// task uf_union(input [label_bits-1:0] a, input [label_bits-1:0] b);
+
+//     reg [label_bits-1:0] ra, rb;
+//     begin
+//         if (a==0 || b==0) disable uf_union;
+//         ra = uf_find(a); rb = uf_find(b);
+//         if (ra == rb) disable uf_union;
+//         if (rank_[ra] < rank_[rb]) begin
+//             parent[ra] <= rb; merge_stats(rb, ra);
+//         end else if (rank_[ra] > rank_[rb]) begin
+//             parent[rb] <= ra; merge_stats(ra, rb);
+//         end else begin
+//             parent[rb] <= ra; rank_[ra] <= rank_[ra] + 1'b1; merge_stats(ra, rb);
+//         end
+//     end
+// endtask
+
+// task init_label(input [label_bits-1:0] L);
+//     begin
+//         parent[L] <= L; rank_[L] <= 0; active[L] <= 1'b1;
+//         area[L] <= 0; sumx[L] <= 0; sumy[L] <= 0;
+//         minx[L] <= {x_bitsize{1'b1}}; miny[L] <= {y_bitsize{1'b1}};
+//         maxx[L] <= 0; maxy[L] <= 0;
+//     end
+// endtask
+
+// task add_pixel_to_root(input [label_bits-1:0] R);
+//     begin
+//         area[R] <= area[R] + 1;
+//         sumx[R] <= sumx[R] + x;
+//         sumy[R] <= sumy[R] + y;
+//         if (x < minx[R]) minx[R] <= x; if (x > maxx[R]) maxx[R] <= x;
+//         if (y < miny[R]) miny[R] <= y; if (y > maxy[R]) maxy[R] <= y;
+//     end
+// endtask
+
+
+// C++ eq: follow parents to find root of component
+// function [label_bits-1:0] uf_find(input [label_bits-1:0] a);
+//     reg [label_bits-1:0] r;
+//     integer k;
+//     begin
+//         r = a;
+//         if (r == 0) begin uf_find = 0; end
+//         else begin
+//             for (k = 0; k < FIND_MAX_ITERS; k = k + 1) begin
+//                 if (parent[r] == r) begin uf_find = r; end
+//                 r = parent[r];
+//             end
+//             uf_find = r; // fallback if loop cap hit
+//         end
+//     end
+// endfunction
+
+// // C++: union by rank; attach smaller tree, update rank, merge stats rb -> ra
+// task merge_stats(input [label_bits-1:0] ra, input [label_bits-1:0] rb);
+//     begin
+//         area[ra] <= area[ra] + area[rb];
+//         sumx[ra] <= sumx[ra] + sumx[rb];
+//         sumy[ra] <= sumy[ra] + sumy[rb];
+//         if (minx[rb] < minx[ra]) minx[ra] <= minx[rb];
+//         if (miny[rb] < miny[ra]) miny[ra] <= miny[rb];
+//         if (maxx[rb] > maxx[ra]) maxx[ra] <= maxx[rb];
+//         if (maxy[rb] > maxy[ra]) maxy[ra] <= maxy[rb];
+//         active[rb] <= 1'b0;
+//         area[rb] <= 0; sumx[rb] <= 0; sumy[rb] <= 0;
+//         minx[rb] <= {x_bitsize{1'b1}}; miny[rb] <= {y_bitsize{1'b1}};
+//         maxx[rb] <= 0; maxy[rb] <= 0;
+//     end
+// endtask
+
+// task uf_union(input [label_bits-1:0] a, input [label_bits-1:0] b);
+//     reg [label_bits-1:0] ra, rb;
+//     begin
+//         if (a==0 || b==0) disable uf_union;
+//         ra = uf_find(a); rb = uf_find(b);
+//         if (ra == rb) disable uf_union;
+//         if (rank_[ra] < rank_[rb]) begin
+//             parent[ra] <= rb; merge_stats(rb, ra);
+//         end else if (rank_[ra] > rank_[rb]) begin
+//             parent[rb] <= ra; merge_stats(ra, rb);
+//         end else begin
+//             parent[rb] <= ra; rank_[ra] <= rank_[ra] + 1'b1; merge_stats(ra, rb);
+//         end
+//     end
+// endtask
+
+// task init_label(input [label_bits-1:0] L);
+//     begin
+//         parent[L] <= L; rank_[L] <= 0; active[L] <= 1'b1;
+//         area[L] <= 0; sumx[L] <= 0; sumy[L] <= 0;
+//         minx[L] <= {x_bitsize{1'b1}}; miny[L] <= {y_bitsize{1'b1}};
+//         maxx[L] <= 0; maxy[L] <= 0;
+//     end
+// endtask
+
+// task add_pixel_to_root(input [label_bits-1:0] R);
+//     begin
+//         area[R] <= area[R] + 1;
+//         sumx[R] <= sumx[R] + x;
+//         sumy[R] <= sumy[R] + y;
+//         if (x < minx[R]) minx[R] <= x; if (x > maxx[R]) maxx[R] <= x;
+//         if (y < miny[R]) miny[R] <= y; if (y > maxy[R]) maxy[R] <= y;
+//     end
+// endtask
+
+
+// always @(posedge clk) begin
+//     if (ext_reset) begin
+//         x <= 0; y <= 0; toggle_line <= 0;
+//         bbox_left <= 0; bbox_right <= 0; bbox_top <= 0; bbox_bottom <= 0; centroid_x <= 0; centroid_y <= 0;
+//         for (i = 0; i < WIDTH; i = i + 1) begin
+//             row0_labels[i] <= 0;
+//             row1_labels[i] <= 0;
+//         end
+//         //out_valid <= 1'b0;
+//     end else begin
+//         // new frame: reset coordinates and clear both line buffers
+//         if (frame_start) begin
+//             x <= 0; y <= 0; toggle_line <= 0;
+//             for (i = 0; i < WIDTH; i = i + 1) begin
+//                 row0_labels[i] <= 0;
+//                 row1_labels[i] <= 0;
+//             end
+//         end 
+        
+//         // new line except first pixel of a frame
+//         if (line_start && !frame_start) begin
+//             // reset x, increment y, toggle line buffers
+//             x <= 0;
+//             y <= y + 1;
+//             toggle_line <= ~toggle_line;
+//         end 
+        
+//         if (in_valid) begin
+//             // during active pixels
+//             if (!curr_pix) begin
+//                 // this is a background pixel
+//                 case (toggle_line)
+//                     0: row1_labels[x] <= 0;
+//                     1: row0_labels[x] <= 0;
+//                 endcase
+//             end else begin
+//                 // 1. map neighbours to current roots
+//                 root_left = (L  != 0) ? uf_find(L)  : 0;
+//                 root_up   = (U  != 0) ? uf_find(U)  : 0;
+//                 root_ul   = (UL != 0) ? uf_find(UL) : 0;
+//                 root_ur   = (UR != 0) ? uf_find(UR) : 0;
+
+//                 /// 2. Choose representative: smallest non-zero root label
+//                 R = 0;
+//                 if (root_left) begin
+//                     R = root_left;
+//                 end
+//                 if (root_up && (R == 0 || root_up < R)) begin
+//                     R = root_up;
+//                 end
+//                 if (root_ul && (R == 0 || root_ul < R)) begin
+//                     R = root_ul;
+//                 end
+//                 if (root_ur && (R == 0 || root_ur < R)) begin
+//                     R = root_ur;
+//                 end
+
+//                 // 3. If no neighbours, new label
+//                 if (R == 0) begin
+//                     R <= next_label;
+//                     init_label(next_label);
+//                     active[next_label] <= 1'b1;
+//                     parent[next_label] <= next_label;
+//                     if (next_label != MAX_LABELS - 1) begin
+//                         next_label <= next_label + 1'b1;
+//                     end
+//                 end
+
+//                 // 4. Union with any neighbour roots that are different
+//                 if (R_left != 0 && R_left != R) begin
+//                     uf_union(R, R_left);
+//                 end
+//                 if (R_up != 0 && R_up != R) begin
+//                     uf_union(R, R_up);
+//                 end
+//                 if (R_ul != 0 && R_ul != R) begin
+//                     uf_union(R, R_ul);
+//                 end
+//                 if (R_ur != 0 && R_ur != R) begin
+//                     uf_union(R, R_ur);
+//                 end
+
+//                 // 5. Final root and update
+//                 R = uf_find(R);
+//                 set_curr_label(x, R);
+//                 add_pixel_to_root(R);
+//             end
+
+//             // increment x within the line (reminder y is handled at the start)
+//             x <= x + 1;
+//         end
+
+//         // frame_end here: outputs to be computed
+//         // if (frame_end) out_valid <= 1;
+//     end
+// end
+    
+// endmodule
