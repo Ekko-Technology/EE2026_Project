@@ -234,17 +234,17 @@ module Top(
     );
 
     // Direct RGB444 path
-    assign frame_pixel = (~sw[0]) ? image_pixel :
-                         (bitmap_pixel ? 12'hFFF : 12'h000);
+    // assign frame_pixel = (~sw[0]) ? image_pixel :
+    //                      (bitmap_pixel ? 12'hFFF : 12'h000);
 
     // Show middle pixel value on LEDs for debugging
-    always @(posedge clk25) begin
-        if (active_area && (frame_addr == 38240)) begin
-            led[11:0] <= image_pixel;
-        end else begin
-            led[11:0] <= led[11:0];
-        end
-    end
+    // always @(posedge clk25) begin
+    //     if (active_area && (frame_addr == 38240)) begin
+    //         led[11:0] <= image_pixel;
+    //     end else begin
+    //         led[11:0] <= led[11:0];
+    //     end
+    // end
 
 
 
@@ -268,9 +268,18 @@ module Top(
         .Mouse_Data(Mouse_Data),
         .servo_x_pwm(servo_x_pwm),
         .servo_y_pwm(servo_y_pwm),
-        .led(led),
+        .led(mouse_led),
         .vga_RGB(mouse_vga_color)
     );
+
+
+    // Choose which value drives Top's led output
+    always @(posedge clk25) begin
+        if (active_area && frame_addr == 38240)
+            led <= image_pixel;    // debug pixel
+        else
+            led <= mouse_led;      // mouse LEDs
+    end
 
 
     // Combine camera and crosshair overlay colors
