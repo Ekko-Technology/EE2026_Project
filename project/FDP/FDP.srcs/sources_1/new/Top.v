@@ -318,16 +318,55 @@ module Top(
     );
 
     // Direct RGB444 path
-    assign frame_pixel = (~sw[0]) ? image_pixel :
-                         (bitmap_pixel ? 12'hFFF : 12'h000);
+    // assign frame_pixel = (~sw[0]) ? image_pixel :
+    //                      (bitmap_pixel ? 12'hFFF : 12'h000);
 
     // Show middle pixel value on LEDs for debugging
-    always @(posedge clk25) begin
-        if (active_area && (frame_addr == 38240)) begin
-            led[11:0] <= image_pixel;
-        end else begin
-            led[11:0] <= led[11:0];
-        end
+    // always @(posedge clk25) begin
+    //     if (active_area && (frame_addr == 38240)) begin
+    //         led[11:0] <= image_pixel;
+    //     end else begin
+    //         led[11:0] <= led[11:0];
+    //     end
+    // end
+
+
+
+
+    wire [15:0] mouse_led;
+    wire [11:0] mouse_vga_color;
+
+    // Servo PWM outputs that are one bit, toggled high/low depending on pwm signal
+    wire servo_x_pwm; 
+    wire servo_y_pwm;
+
+    // temporary holder for screen pixel coordinates (to be replaced)
+    wire [9:0] x_coord;
+    wire [8:0] y_coord;
+
+    // mouse controller module
+    mouse_movement mouse_ctrl (
+        .clk(clk),
+        .btnU(btnU),
+        .x_coord(x_coord),
+        .y_coord(y_coord),
+        .Mouse_Clk(Mouse_Clk),
+        .Mouse_Data(Mouse_Data),
+        .servo_x_pwm(servo_x_pwm),
+        .servo_y_pwm(servo_y_pwm),
+        .led(mouse_led),
+        .vga_RGB(mouse_vga_color)
+    );
+
+    always @(*) begin
+        led = mouse_led;
     end
+
+
+    // Combine camera and crosshair overlay colors
+    assign frame_pixel = ((~sw[1])
+                            ? image_pixel
+                            : (bitmap_pixel ? 12'hFFF : 12'h000))
+                          | mouse_vga_color;
 
 endmodule
