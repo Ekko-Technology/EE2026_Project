@@ -36,10 +36,10 @@ module Median_Filter
     reg [PIXEL_DEPTH-1:0] clinebuf2 [0:IMAGE_WIDTH-1];  // row-2 color
 
     // 3x3 sliding window shift registers per row (oldest at index 0)
-    reg [GRAY_DEPTH-1:0] w0 [0:2]; // top    row (row-2)
+    reg [GRAY_DEPTH-1:0] w0 [0:2]; // top row (row-2)
     reg [GRAY_DEPTH-1:0] w1 [0:2]; // middle row (row-1)
     reg [GRAY_DEPTH-1:0] w2 [0:2]; // bottom row (row)
-    reg [PIXEL_DEPTH-1:0] cw0 [0:2]; // top    row color
+    reg [PIXEL_DEPTH-1:0] cw0 [0:2]; // top row color
     reg [PIXEL_DEPTH-1:0] cw1 [0:2]; // middle row color
     reg [PIXEL_DEPTH-1:0] cw2 [0:2]; // bottom row color
 

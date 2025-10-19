@@ -80,27 +80,79 @@ module Top(
         .we(we)
     );
 
-    //----------- MEDIAN FILTER ----------- //
-    wire pixel_valid;
-    wire [11:0] filtered_pixel;
-    wire [17:0] filtered_addr;
+    //----------- MEDIAN FILTERS (3x3 and 5x5) ----------- //
+    // // 3x3 instance
+    // wire pixel_valid_3x3;
+    // wire [11:0] filtered_pixel_3x3;
+    // wire [17:0] filtered_addr_3x3;
+    // Median_Filter #(
+    //     .KERNEL_SIZE(3),
+    //     .PIXEL_DEPTH(12),
+    //     .IMAGE_WIDTH(306),
+    //     .IMAGE_HEIGHT(240)
+    // )
+    // median_filter(
+    //     .clk(ov7670_pclk),
+    //     .reset(cap_reset),
+    //     .frame_start(ov7670_vsync),
+    //     .pixel_in(dout),
+    //     .we(we),
+    //     .pixel_out(filtered_pixel_3x3),
+    //     .addr_out(filtered_addr_3x3),
+    //     .pixel_valid(pixel_valid_3x3)
+    // );
+    
+    // 5x5 instance (stub for A/B testing)
+    // wire pixel_valid_5x5;
+    // wire [11:0] filtered_pixel_5x5;
+    // wire [17:0] filtered_addr_5x5;
+    // Median_Filter_5x5 #(
+    //     .PIXEL_DEPTH(12),
+    //     .IMAGE_WIDTH(306),
+    //     .IMAGE_HEIGHT(240)
+    // )
+    // median_filter_5x5(
+    //     .clk(ov7670_pclk),
+    //     .reset(cap_reset),
+    //     .frame_start(ov7670_vsync),
+    //     .pixel_in(dout),
+    //     .we(we),
+    //     .pixel_out(filtered_pixel_5x5),
+    //     .addr_out(filtered_addr_5x5),
+    //     .pixel_valid(pixel_valid_5x5)
+    // );
 
-    Median_Filter #(
-        .KERNEL_SIZE(3),
-        .PIXEL_DEPTH(12),
+    //----------- GAUSSIAN 3x3 via Convolution3x3 ----------- //
+    // Kernel: [1 2 1; 2 4 2; 1 2 1] with SCALE=4 (divide by 16)
+    wire                    pixel_valid_gauss_3x3;
+    wire [11:0]             filtered_pixel_gauss_3x3;
+    wire [17:0]             filtered_addr_gauss_3x3;
+    Convolution_3x3 #(
         .IMAGE_WIDTH(306),
-        .IMAGE_HEIGHT(240)
-    )
-    median_filter(
+        .IMAGE_HEIGHT(240),
+        .PIXEL_DEPTH(12),
+        .COEF_WIDTH(8),
+        .k00(1), .k01(2), .k02(1),
+        .k10(2), .k11(4), .k12(2),
+        .k20(1), .k21(2), .k22(1),
+        .BIAS(0),
+        .SCALE(4)
+    ) gaussian3x3 (
         .clk(ov7670_pclk),
         .reset(cap_reset),
         .frame_start(ov7670_vsync),
-        .pixel_in(dout),
         .we(we),
-        .pixel_out(filtered_pixel),
-        .addr_out(filtered_addr),
-        .pixel_valid(pixel_valid)
+        .mode_rgb(1'b1),             // camera provides RGB444
+        .pixel_rgb_in(dout),
+        .pixel_bin_in(1'b0),
+        .pixel_out(filtered_pixel_gauss_3x3),
+        .addr_out(filtered_addr_gauss_3x3),
+        .pixel_valid(pixel_valid_gauss_3x3)
     );
+    
+    wire pixel_valid = pixel_valid_gauss_3x3;
+    wire [11:0] filtered_pixel = filtered_pixel_gauss_3x3;
+    wire [17:0] filtered_addr  = filtered_addr_gauss_3x3;
 
     // Unified write controls for both RGB frame buffer and 1-bit bitmap buffer
     // Share write enable and address; keep separate data for RGB (12-bit) and bitmap (1-bit)
@@ -162,6 +214,27 @@ module Top(
     wire [17:0] rd_base = rd_sel ? FRAME_PIXELS : 18'd0;
     wire [17:0] addrb18 = {1'b0, frame_addr} + rd_base;
 
+    // Latch the write-base per frame so all writes for a frame (including padding flush)
+    // target the same half. Arm on VSYNC rise, capture on the first incoming pixel (we==1)
+    // of the new frame to avoid any overlap hazards.
+    reg [17:0] wr_base_frame = FRAME_PIXELS; // consistent with wr_sel reset to 1 (TOP) on cap_reset
+    reg        wrb_arm = 1'b0;
+    always @(posedge ov7670_pclk) begin
+        if (cap_reset) begin
+            wr_base_frame <= FRAME_PIXELS;
+            wrb_arm <= 1'b0;
+        end else begin
+            if (cam_vsync_rise) begin
+                wrb_arm <= 1'b1; // prepare to latch base for the next frame
+            end
+            if (wrb_arm && we) begin
+                // wr_sel has already toggled on cam_vsync_rise; use current wr_base
+                wr_base_frame <= wr_base;
+                wrb_arm <= 1'b0;
+            end
+        end
+    end
+
     // PCLK-domain writer:
     // - Image RGB: raw on we==1, filtered overwrite on we==0
     // - Bitmap 1-bit: raw-threshold on we==1, filtered-threshold overwrite on we==0
@@ -178,31 +251,42 @@ module Top(
         end else begin
             we_w <= 1'b0; // default no write; assert exactly once per cycle below
 
-            // Latch a new filtered center write when available
-            if (sw[1] && we && pixel_valid) begin
+            // Latch a pending filtered write only when we==1 (raw write occupies the port).
+            if (we && sw[1] && pixel_valid && !pend) begin
                 pend <= 1'b1;
-                pend_addr_q <= filtered_addr + wr_base; // absolute address in the active write half
+                pend_addr_q <= filtered_addr + wr_base_frame; // absolute address in the latched frame half
                 fpix_q <= filtered_pixel;
                 // bitmap bit from filtered pixel (same address as RGB)
-                bdin_q <= ((filtered_pixel[3:0]  >= 4'h9) && (filtered_pixel[3:0]  <= 4'hF) &&
+                bdin_q <= ((filtered_pixel[3:0]  >= 4'h6) && (filtered_pixel[3:0]  <= 4'hF) &&
                            (filtered_pixel[7:4]  >= 4'h6) && (filtered_pixel[7:4]  <= 4'hF) &&
                            (filtered_pixel[11:8] >= 4'h0) && (filtered_pixel[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
             end
 
-            // On the non-pixel byte cycles (we==0), perform the pending filtered write
-            if (!we && pend) begin
-                waddr18_r  <= pend_addr_q;
-                rgb_dina_r <= fpix_q;
-                bmp_dina_r <= bdin_q;
-                we_w <= 1'b1;
-                pend <= 1'b0;
+            // On the non-pixel cycles (we==0):
+            //  1) If a pending entry exists (from a prior we==1), commit it first to preserve order.
+            //  2) Else, if a current filtered pixel is valid, write it immediately (padding flush support).
+            if (!we) begin
+                if (pend) begin
+                    waddr18_r  <= pend_addr_q;
+                    rgb_dina_r <= fpix_q;
+                    bmp_dina_r <= bdin_q;
+                    we_w <= 1'b1;
+                    pend <= 1'b0;
+                end else if (sw[1] && pixel_valid) begin
+                    waddr18_r  <= filtered_addr + wr_base_frame;
+                    rgb_dina_r <= filtered_pixel;
+                    bmp_dina_r <= ((filtered_pixel[3:0]  >= 4'h6) && (filtered_pixel[3:0]  <= 4'hF) &&
+                                   (filtered_pixel[7:4]  >= 4'h3) && (filtered_pixel[7:4]  <= 4'hA) &&
+                                   (filtered_pixel[11:8] >= 4'h0) && (filtered_pixel[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
+                    we_w <= 1'b1;
+                end
             end
 
             // On pixel-complete cycles (we==1), always write the RAW pixel to its address
             if (we) begin
-                waddr18_r  <= {1'b0, addr} + wr_base;
+                waddr18_r  <= {1'b0, addr} + wr_base_frame;
                 rgb_dina_r <= dout;
-                bmp_dina_r <= ((dout[3:0]  >= 4'h8) && (dout[3:0]  <= 4'hF) &&
+                bmp_dina_r <= ((dout[3:0]  >= 4'h6) && (dout[3:0]  <= 4'hF) &&
                                    (dout[7:4]  >= 4'h6) && (dout[7:4]  <= 4'hF) &&
                                    (dout[11:8] >= 4'h0) && (dout[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
                 we_w <= 1'b1;
