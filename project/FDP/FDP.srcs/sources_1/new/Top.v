@@ -251,19 +251,21 @@ module Top(
 
     wire [15:0] mouse_led;
     wire [11:0] mouse_vga_color;
-    wire [15:0] servo_x_pwm; 
-    wire [15:0] servo_y_pwm;
 
-    // temporary holder for screen pixel coordinates
+    // Servo PWM outputs that are one bit, toggled high/low depending on pwm signal
+    wire servo_x_pwm; 
+    wire servo_y_pwm;
+
+    // temporary holder for screen pixel coordinates (to be replaced)
     wire [9:0] x_coord;
     wire [8:0] y_coord;
 
-    // outputs PWM signals, crosshair overlay and LED bullets remaining
+    // mouse controller module
     mouse_movement mouse_ctrl (
         .clk(clk),
         .btnU(btnU),
-        .x_coord(x_coord), // pass VGA horizontal pixel
-        .y_coord(y_coord), // pass VGA vertical pixel
+        .x_coord(x_coord),
+        .y_coord(y_coord),
         .Mouse_Clk(Mouse_Clk),
         .Mouse_Data(Mouse_Data),
         .servo_x_pwm(servo_x_pwm),
@@ -272,13 +274,8 @@ module Top(
         .vga_RGB(mouse_vga_color)
     );
 
-
-    // Choose which value drives Top's led output
-    always @(posedge clk25) begin
-        if (active_area && frame_addr == 38240)
-            led <= image_pixel;    // debug pixel
-        else
-            led <= mouse_led;      // mouse LEDs
+    always @(*) begin
+        led = mouse_led;
     end
 
 
