@@ -30,8 +30,8 @@ module mouse_movement(
 `ifdef SIMULATION
     input left_sim, // simulation-only input to simulate left clicks
 `endif
-    output reg [15:0] servo_x_pwm, // PWM signal for X servo
-    output reg [15:0] servo_y_pwm, // PWM signal for Y servo
+    output servo_x_pwm, // PWM signal for X servo
+    output servo_y_pwm, // PWM signal for Y servo
     output reg [15:0] led,  //Bullet counts
     output reg [11:0] vga_RGB
     );
@@ -104,12 +104,27 @@ module mouse_movement(
     localparam MIN_MOVE = 2; // ignore slow delta movements
     localparam MAX_MOVE = 20;// ignore fast delta movements
 
-    // Servo angle state
+    // Servo update smoothing, where servo angles are only updated every SMOOTH_DIV cycles
+    localparam SMOOTH_DIV = 100_000; // 1 ms update at 100 MHz
+    reg [16:0] smooth_counter = 0;
+    reg smooth_tick = 0;
+
+    always @(posedge clk) begin
+        if (smooth_counter >= SMOOTH_DIV-1) begin
+            smooth_counter <= 0;
+            smooth_tick <= 1;
+        end else begin
+            smooth_counter <= smooth_counter + 1;
+            smooth_tick <= 0;
+        end
+    end
+
+    // Update servo angles every smooth_tick
     always @(posedge clk) begin
         if (btnU) begin
             servo_x_angle <= 90;
             servo_y_angle <= 90;
-        end else if (new_event) begin
+        end else if (new_event && smooth_tick) begin
             // Filter X
             if (delta_x > MIN_MOVE)
                 filtered_x = (delta_x > MAX_MOVE) ? MAX_MOVE : delta_x;
@@ -126,32 +141,44 @@ module mouse_movement(
             else
                 filtered_y = 0;
 
-            // Apply filtered deltas to servo angles
+            // Apply filtered deltas
             servo_x_angle <= servo_x_angle + filtered_x;
             servo_y_angle <= servo_y_angle + filtered_y;
 
-            // Clamp y servo angles between 0 to 180 degrees
-            if (servo_y_angle < 0) 
-                servo_y_angle <= 0;
-            else if (servo_y_angle > 180) 
-                servo_y_angle <= 180;
+            // Clamp angles
+            if (servo_x_angle < 0) servo_x_angle <= 0;
+            else if (servo_x_angle > 180) servo_x_angle <= 180;
 
-            // Clamp x servo angles between 0 to 180 degrees
-            if (servo_x_angle < 0) 
-                servo_x_angle <= 0;
-            else if (servo_x_angle > 180) 
-                servo_x_angle <= 180;
+            if (servo_y_angle < 0) servo_y_angle <= 0;
+            else if (servo_y_angle > 180) servo_y_angle <= 180;
         end
     end
-        
-    // PWM calculation
-    always @(*) begin
-        // Assumption that:
-        // 1000 µs: the minimum pulse width (0°)
-        // 2000 µs: the maximum pulse width (180°)
-        servo_x_pwm = 1000 + servo_x_angle * 1000 / 180;
-        servo_y_pwm = 1000 + servo_y_angle * 1000 / 180;
+    
+    // Servo PWM generation (50 Hz, 20 ms period)
+    reg [20:0] pwm_counter = 0;  // counts up to 1,000,000 for 20 ms at 50 MHz clock
+    reg servo_x_out;
+    reg servo_y_out;
+
+    always @(posedge clk) begin
+        // Reset counter every 20 ms as most servo motors works with such
+        if (pwm_counter >= 2_000_000 - 1)
+            pwm_counter <= 0;
+        else
+            pwm_counter <= pwm_counter + 1;
     end
+
+    // Convert servo angle (0–180 degrees) to pulse width (1 ms – 2 ms)
+    wire [20:0] pulse_width_x = 100_000 + (servo_x_angle * 100_000 / 180);
+    wire [20:0] pulse_width_y = 100_000 + (servo_y_angle * 100_000 / 180);
+
+    // Generate PWM
+    always @(posedge clk) begin
+        servo_x_out <= (pwm_counter < pulse_width_x);
+        servo_y_out <= (pwm_counter < pulse_width_y);
+    end
+
+    assign servo_x_pwm = servo_x_out;
+    assign servo_y_pwm = servo_y_out;
 
 
 
