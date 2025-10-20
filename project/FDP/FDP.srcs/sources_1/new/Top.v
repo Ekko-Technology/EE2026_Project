@@ -11,6 +11,9 @@ module Top(
     output reg [15:0] led,
     input [4:0] sw,
 
+    inout mouse_clk,
+    inout mouse_data,
+
     output vga_Hsync,
     output vga_Vsync,
     output [11:0] vga_RGB    //4-bit red, 4-bit green, 4-bit blue
@@ -32,6 +35,8 @@ module Top(
     wire [16:0] frame_addr;             // logical 0..(306*240-1)
     wire [11:0] image_pixel;            // 12-bit RGB444 from BRAM
     wire [11:0] frame_pixel;            // RGB444 to VGA
+    wire [9:0] frame_x;  // current x coord in frame (0..639)
+    wire [9:0] frame_y;  // current y coord in frame (0..479)
     wire active_area;
 
     VGA_Controller vga(
@@ -42,6 +47,8 @@ module Top(
         .vga_hsync(vga_Hsync),
         .vga_vsync(vga_Vsync),
         .frame_addr(frame_addr),
+        .frame_x(frame_x),
+        .frame_y(frame_y),
         .frame_pixel(frame_pixel),
         .active_area(active_area)
     );
@@ -258,7 +265,7 @@ module Top(
                 fpix_q <= filtered_pixel;
                 // bitmap bit from filtered pixel (same address as RGB)
                 bdin_q <= ((filtered_pixel[3:0]  >= 4'h6) && (filtered_pixel[3:0]  <= 4'hF) &&
-                           (filtered_pixel[7:4]  >= 4'h6) && (filtered_pixel[7:4]  <= 4'hF) &&
+                           (filtered_pixel[7:4]  >= 4'h3) && (filtered_pixel[7:4]  <= 4'hA) &&
                            (filtered_pixel[11:8] >= 4'h0) && (filtered_pixel[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
             end
 
@@ -350,8 +357,8 @@ module Top(
         .btnU(btnU),
         .x_coord(x_coord),
         .y_coord(y_coord),
-        .Mouse_Clk(Mouse_Clk),
-        .Mouse_Data(Mouse_Data),
+        .mouse_clk(mouse_clk),
+        .mouse_data(mouse_data),
         .servo_x_pwm(servo_x_pwm),
         .servo_y_pwm(servo_y_pwm),
         .led(mouse_led),
@@ -364,9 +371,8 @@ module Top(
 
 
     // Combine camera and crosshair overlay colors
-    assign frame_pixel = ((~sw[1])
-                            ? image_pixel
-                            : (bitmap_pixel ? 12'hFFF : 12'h000))
-                          | mouse_vga_color;
+    assign frame_pixel = ((~sw[0])
+                            ? ( image_pixel )
+                            : ( bitmap_pixel ? 12'hFFF : 12'h000) );
 
 endmodule

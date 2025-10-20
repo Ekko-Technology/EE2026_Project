@@ -25,8 +25,8 @@ module mouse_movement(
     input btnU, // reset
     input [9:0] x_coord,  // pixel index width
     input [8:0] y_coord, // pixel index height
-    inout Mouse_Clk,  //PS2 mouse clock
-    inout Mouse_Data,  //PS2 data packets
+    inout mouse_clk,  //PS2 mouse clock
+    inout mouse_data,  //PS2 data packets
 `ifdef SIMULATION
     input left_sim, // simulation-only input to simulate left clicks
 `endif
@@ -52,8 +52,8 @@ module mouse_movement(
     MouseCtl mouse_instance (
         .clk(clk),
         .rst(btnU),
-        .ps2_clk(Mouse_Clk),
-        .ps2_data(Mouse_Data),
+        .ps2_clk(mouse_clk),
+        .ps2_data(mouse_data),
         .xpos(xpos),
         .ypos(ypos),
         .zpos(zpos),

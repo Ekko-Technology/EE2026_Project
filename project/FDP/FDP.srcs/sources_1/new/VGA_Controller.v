@@ -12,6 +12,8 @@ module VGA_Controller(
     output reg vga_hsync,
     output reg vga_vsync,
     output [16:0] frame_addr,    // BRAM address for 320x240 frame (doubled to 640x480)
+    output [9:0] frame_x,  // current x coord in frame (0..639)
+    output [9:0] frame_y,  // current y coord in frame (0..479)
     input [11:0] frame_pixel,
     output active_area
 );
@@ -43,7 +45,8 @@ module VGA_Controller(
     wire [8:0] src_y = vCounter[9:1]; // vCounter (0-479)  >> 1 (0..239)
     wire [8:0] src_x = hCounter[9:1]; // hCounter (0..639) >> 1 (0..319)
     assign frame_addr = src_y * 306 + src_x-14;     // i only want 306 right-side pixels
-
+    assign frame_x = hCounter;
+    assign frame_y = vCounter;
 
     always @(posedge clk25) begin
         // Count the horizontal and vertical positions
