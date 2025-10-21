@@ -520,7 +520,7 @@ module Top(
     wire [11:0] mouse_vga_color;
 
     // Servo PWM outputs that are one bit, toggled high/low depending on pwm signal
-    wire servo_x_pwm; 
+    wire servo_x_pwm;
     wire servo_y_pwm;
 
     // temporary holder for screen pixel coordinates (to be replaced)
