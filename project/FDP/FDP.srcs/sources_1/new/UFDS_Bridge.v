@@ -4,9 +4,8 @@ module UFDS_Bridge (
     input  wire pclk,
     input  wire p_rst,
     input  wire p_valid,
-    input  wire p_fs,
-    input  wire p_ls,
-    input  wire p_fe,
+    input  wire [8:0] p_x,  // 0..305 (306 pixels wide)
+    input  wire [7:0] p_y,  // 0..239 (240 pixels tall)
     input  wire p_px,
     // UFDS @ 100 MHz
     input  wire clk,
@@ -19,10 +18,15 @@ module UFDS_Bridge (
     // Bridge ready (mirrors UFDS ready)
     output wire ready_o
 );
+
+    wire p_fs = (p_x==9'd0 && p_y==8'd0) ? 1'b1 : 1'b0; // frame start when x=0,y=0
+    wire p_ls = (p_x==9'd0) ? 1'b1 : 1'b0;              // line start when x=0
+    wire p_fe = (p_x == 9'd305 && p_y == 8'd239) ? 1'b1 : 1'b0; // frame end at last pixel (306x240)
+
     // FIFO signals
     wire        wr_full;
     wire        rd_empty;
-    reg         rd_en;
+    (* ram_style = "distributed" *) reg         rd_en;
     wire [3:0]  rd_data;
 
     // Enqueue every valid pixel word (4 bits)
@@ -44,8 +48,8 @@ module UFDS_Bridge (
     wire ready_i;
     assign ready_o = ready_i;
 
-    reg        in_valid_q;
-    reg  fs_q, ls_q, fe_q, px_q;
+    (* ram_style = "distributed" *) reg        in_valid_q;
+    (* ram_style = "distributed" *) reg  fs_q, ls_q, fe_q, px_q;
 
     UFDS_Detector u_ufds (
         .clk(clk),
@@ -68,9 +72,9 @@ module UFDS_Bridge (
     );
 
     // Simple 1-word read buffer to align to UFDS ready
-    reg        have;
-    reg [3:0] hold;
-    reg        pop_inflight;
+    (* ram_style = "distributed" *) reg        have;
+    (* ram_style = "distributed" *) reg [3:0] hold;
+    (* ram_style = "distributed" *) reg        pop_inflight;
 
     always @(posedge clk) begin
         if (ext_reset | p_rst) begin

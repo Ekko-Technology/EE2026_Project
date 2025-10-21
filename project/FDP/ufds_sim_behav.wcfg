@@ -11,157 +11,73 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="15517292250fs"></ZoomStartTime>
-      <ZoomEndTime time="16896292251fs"></ZoomEndTime>
-      <Cursor1Time time="14628426000fs"></Cursor1Time>
+      <ZoomStartTime time="44764000000fs"></ZoomStartTime>
+      <ZoomEndTime time="44957600001fs"></ZoomEndTime>
+      <Cursor1Time time="44515000000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
-      <NameColumnWidth column_width="156"></NameColumnWidth>
-      <ValueColumnWidth column_width="63"></ValueColumnWidth>
+      <NameColumnWidth column_width="149"></NameColumnWidth>
+      <ValueColumnWidth column_width="66"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="36" />
-   <wvobject fp_name="/ufds_sim/clk" type="logic">
+   <WVObjectSize size="15" />
+   <wvobject type="logic" fp_name="/ufds_sim/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/rst" type="logic">
+   <wvobject type="logic" fp_name="/ufds_sim/rst">
       <obj_property name="ElementShortName">rst</obj_property>
       <obj_property name="ObjectShortName">rst</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/p_px" type="logic">
-      <obj_property name="ElementShortName">p_px</obj_property>
-      <obj_property name="ObjectShortName">p_px</obj_property>
+   <wvobject type="logic" fp_name="/ufds_sim/p_px_r">
+      <obj_property name="ElementShortName">p_px_r</obj_property>
+      <obj_property name="ObjectShortName">p_px_r</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/dut/u_ufds/state" type="array">
+   <wvobject type="array" fp_name="/ufds_sim/dut/u_ufds/state">
       <obj_property name="ElementShortName">state[4:0]</obj_property>
       <obj_property name="ObjectShortName">state[4:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/x" type="array">
+   <wvobject type="array" fp_name="/ufds_sim/x">
       <obj_property name="ElementShortName">x[31:0]</obj_property>
       <obj_property name="ObjectShortName">x[31:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/y" type="array">
+   <wvobject type="array" fp_name="/ufds_sim/y">
       <obj_property name="ElementShortName">y[31:0]</obj_property>
       <obj_property name="ObjectShortName">y[31:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp_count" type="array">
-      <obj_property name="ElementShortName">comp_count[2:0]</obj_property>
-      <obj_property name="ObjectShortName">comp_count[2:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/dut/u_ufds/x">
+      <obj_property name="ElementShortName">x[8:0]</obj_property>
+      <obj_property name="ObjectShortName">x[8:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_left" type="array">
-      <obj_property name="ElementShortName">comp0_left[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_left[8:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/dut/u_ufds/y">
+      <obj_property name="ElementShortName">y[7:0]</obj_property>
+      <obj_property name="ObjectShortName">y[7:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_right" type="array">
-      <obj_property name="ElementShortName">comp0_right[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_right[8:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/dut/u_ufds/active_root">
+      <obj_property name="ElementShortName">active_root[0:511]</obj_property>
+      <obj_property name="ObjectShortName">active_root[0:511]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_top" type="array">
-      <obj_property name="ElementShortName">comp0_top[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_top[7:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/bbox_left">
+      <obj_property name="ElementShortName">bbox_left[8:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_left[8:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_bottom" type="array">
-      <obj_property name="ElementShortName">comp0_bottom[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_bottom[7:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/bbox_right">
+      <obj_property name="ElementShortName">bbox_right[8:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_right[8:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_cx" type="array">
-      <obj_property name="ElementShortName">comp0_cx[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_cx[8:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/centroid_x">
+      <obj_property name="ElementShortName">centroid_x[8:0]</obj_property>
+      <obj_property name="ObjectShortName">centroid_x[8:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_cy" type="array">
-      <obj_property name="ElementShortName">comp0_cy[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_cy[7:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/centroid_y">
+      <obj_property name="ElementShortName">centroid_y[7:0]</obj_property>
+      <obj_property name="ObjectShortName">centroid_y[7:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_left" type="array">
-      <obj_property name="ElementShortName">comp1_left[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_left[8:0]</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/bbox_bottom">
+      <obj_property name="ElementShortName">bbox_bottom[7:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_bottom[7:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_right" type="array">
-      <obj_property name="ElementShortName">comp1_right[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_right[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_top" type="array">
-      <obj_property name="ElementShortName">comp1_top[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_top[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_bottom" type="array">
-      <obj_property name="ElementShortName">comp1_bottom[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_bottom[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_cx" type="array">
-      <obj_property name="ElementShortName">comp1_cx[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_cx[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_cy" type="array">
-      <obj_property name="ElementShortName">comp1_cy[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_cy[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_left" type="array">
-      <obj_property name="ElementShortName">comp2_left[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_left[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_right" type="array">
-      <obj_property name="ElementShortName">comp2_right[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_right[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_top" type="array">
-      <obj_property name="ElementShortName">comp2_top[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_top[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_bottom" type="array">
-      <obj_property name="ElementShortName">comp2_bottom[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_bottom[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_cx" type="array">
-      <obj_property name="ElementShortName">comp2_cx[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_cx[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_cy" type="array">
-      <obj_property name="ElementShortName">comp2_cy[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_cy[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_left" type="array">
-      <obj_property name="ElementShortName">comp3_left[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_left[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_right" type="array">
-      <obj_property name="ElementShortName">comp3_right[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_right[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_top" type="array">
-      <obj_property name="ElementShortName">comp3_top[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_top[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_bottom" type="array">
-      <obj_property name="ElementShortName">comp3_bottom[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_bottom[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_cx" type="array">
-      <obj_property name="ElementShortName">comp3_cx[8:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_cx[8:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_cy" type="array">
-      <obj_property name="ElementShortName">comp3_cy[7:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_cy[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp0_area" type="array">
-      <obj_property name="ElementShortName">comp0_area[15:0]</obj_property>
-      <obj_property name="ObjectShortName">comp0_area[15:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp1_area" type="array">
-      <obj_property name="ElementShortName">comp1_area[15:0]</obj_property>
-      <obj_property name="ObjectShortName">comp1_area[15:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp2_area" type="array">
-      <obj_property name="ElementShortName">comp2_area[15:0]</obj_property>
-      <obj_property name="ObjectShortName">comp2_area[15:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/comp3_area" type="array">
-      <obj_property name="ElementShortName">comp3_area[15:0]</obj_property>
-      <obj_property name="ObjectShortName">comp3_area[15:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/ufds_sim/dut/u_ufds/frame_end_accepted_pixel" type="logic">
-      <obj_property name="ElementShortName">frame_end_accepted_pixel</obj_property>
-      <obj_property name="ObjectShortName">frame_end_accepted_pixel</obj_property>
+   <wvobject type="array" fp_name="/ufds_sim/bbox_top">
+      <obj_property name="ElementShortName">bbox_top[7:0]</obj_property>
+      <obj_property name="ObjectShortName">bbox_top[7:0]</obj_property>
    </wvobject>
 </wave_config>

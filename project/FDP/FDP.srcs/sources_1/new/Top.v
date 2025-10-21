@@ -14,6 +14,9 @@ module Top(
     inout mouse_clk,
     inout mouse_data,
 
+    output [7:0] seg,
+    output [3:0] an,
+
     output vga_Hsync,
     output vga_Vsync,
     output [11:0] vga_RGB    //4-bit red, 4-bit green, 4-bit blue
@@ -41,7 +44,7 @@ module Top(
     // Wire for BRAM address from VGA controller
     wire [16:0] frame_addr;             // logical 0..(306*240-1)
     wire [11:0] image_pixel;            // 12-bit RGB444 from BRAM
-    wire [11:0] frame_pixel;            // RGB444 to VGA
+    reg [11:0] frame_pixel;            // RGB444 to VGA
     wire [9:0] frame_x;  // current x coord in frame (0..639)
     wire [9:0] frame_y;  // current y coord in frame (0..479)
     wire active_area;
@@ -442,6 +445,75 @@ module Top(
     // end
 
 
+    wire [8:0] bbox_left, bbox_right, centroid_x;
+    wire [7:0] bbox_top, bbox_bottom, centroid_y;
+    wire ready_o;
+    // Only feed UFDS within the 306x240 cropped active area (x in [14,319], y in [0,239])
+    wire in_roi = active_area && (frame_x[9:1] >= 10'd14) && (frame_x[9:1] < 10'd320) && (frame_y[9:1] < 10'd240);
+    // Decimate the VGA-doubled raster (640x480) to source grid (320x240):
+    // take only even hCounter/vCounter pixels so each source pixel is enqueued once
+    wire decim_hv = (~frame_x[0]) && (~frame_y[0]);
+    UFDS_Bridge ufds_bridge (
+        .pclk(clk25),
+        .p_rst(cap_reset),
+    // Gate valid to ROI AND decimate by 2x2 so UFDS sees exactly 306x240 unique pixels per frame
+    .p_valid(in_roi && decim_hv),
+        .p_x(frame_x[9:1] - 14),
+        .p_y(frame_y[9:1]),
+        .p_px(bitmap_pixel), // use same bitmap data as pixel input
+        .clk(clk50),
+        .ext_reset(cap_reset),
+        .bbox_left(bbox_left),
+        .bbox_right(bbox_right),
+        .bbox_top(bbox_top),
+        .bbox_bottom(bbox_bottom),
+        .centroid_x(centroid_x),
+        .centroid_y(centroid_y),
+        .ready_o(ready_o)
+    );
+
+    Seven_Seg ssd (
+        .clk(clk),
+        .num( {bbox_left_latch[6:0], bbox_right_latch} ),
+        .dd(4'b0000),
+        .seg(seg),
+        .an(an)
+    );
+
+    // reg [16:0] temp_addr;
+    // reg [9:0] temp_x;
+    // reg [8:0] temp_y;
+    reg [8:0] bbox_left_latch, bbox_right_latch;
+    reg [7:0] bbox_top_latch, bbox_bottom_latch;
+    reg [24:0] ss_counter;
+    reg [15:0] ss_update;
+    always @(posedge clk25) begin
+        // Draw bbox as a rectangle outline bounded by its extents
+        // Vertical edges when x == left/right AND y within [top, bottom]
+        // Horizontal edges when y == top/bottom AND x within [left, right]
+        ss_counter = ss_counter + 1;
+        // if (ss_counter == 0) ss_update <= {bbox_top_latch, bbox_bottom_latch};
+        if (ss_counter == 0) ss_update <= {bbox_left_latch[6:0], bbox_right_latch};
+        else ss_update <= ss_update;
+
+        if (frame_addr == 73439) begin
+            bbox_left_latch   <= bbox_left;
+            bbox_right_latch  <= bbox_right;
+            bbox_top_latch    <= bbox_top;
+            bbox_bottom_latch <= bbox_bottom;
+            led[8:0] <= bbox_left;
+        end else begin
+            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
+            if (in_roi && (frame_x[9:1]-14 == bbox_left_latch || frame_x[9:1]-14 == bbox_right_latch ||
+                frame_y[9:1] == bbox_top_latch || frame_y[9:1] == bbox_bottom_latch)) begin
+                frame_pixel <= 12'h0F0;
+            end
+            else begin
+                if (sw[0]) frame_pixel <= (bitmap_pixel ? 12'hFFF : 12'h000);
+                else frame_pixel <= image_pixel;
+            end
+        end
+    end
 
 
     wire [15:0] mouse_led;
@@ -469,14 +541,14 @@ module Top(
         .vga_RGB(mouse_vga_color)
     );
 
-    always @(*) begin
-        led = mouse_led;
-    end
+    // always @(*) begin
+    //     led = mouse_led;
+    // end
 
 
     // Combine camera and crosshair overlay colors
-    assign frame_pixel = ((~sw[0])
-                            ? ( image_pixel )
-                            : ( bitmap_pixel ? 12'hFFF : 12'h000) );
+    // assign frame_pixel = ((~sw[0])
+    //                         ? ( image_pixel )
+    //                         : ( bitmap_pixel ? 12'hFFF : 12'h000) );
 
 endmodule

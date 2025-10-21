@@ -51,15 +51,15 @@ module UFDS_Detector(
 
     );
 
-localparam integer WIDTH = 320;
+localparam integer WIDTH = 306;
 localparam integer HEIGHT = 240;
 localparam integer x_bitsize = 9;
 localparam integer y_bitsize = 8;
-localparam integer label_bits = 12; // rmb label == 0 is the background and supports up to 4095 labels (can reduce if dont need this many labels)
+localparam integer label_bits = 9; // rmb label == 0 is the background and supports up to 4095 labels (can reduce if dont need this many labels)
 
 // current pixel coordinates (increment x each pixel, on line_start x=0 and y increment by 1)
-reg [x_bitsize-1:0] x;
-reg [y_bitsize-1:0] y;
+(* ram_style = "distributed" *) reg [x_bitsize-1:0] x;
+(* ram_style = "distributed" *) reg [y_bitsize-1:0] y;
 
 /* 
  *UFDS need to check neighbours' labels, we use 2 lines of buffer (reduced neighbours) 
@@ -68,31 +68,31 @@ reg [y_bitsize-1:0] y;
  * just swap the roles of these two after every row (using toggle_line 0: prev=buff0, curr=buff1; 1: prev=buff1, curr=buff0)
  * each entry stores the component ID
 */
-reg [label_bits-1:0] row0_labels[0:WIDTH-1];
-reg [label_bits-1:0] row1_labels[0:WIDTH-1];
+(* ram_style = "distributed" *) reg [label_bits-1:0] row0_labels[0:WIDTH-1];
+(* ram_style = "distributed" *) reg [label_bits-1:0] row1_labels[0:WIDTH-1];
 reg toggle_line; // 0: prev=buff0, curr=buff1; 1: prev=buff1, curr=buff0
 
 /*
  * Quick-Union Disjoint Set ADT implementation (specifically weighted union) 
  * and the stats to store for each label
  */
-localparam integer MAX_LABELS = 4096; // can reduce if dont need this many labels
+localparam integer MAX_LABELS = 512; // can reduce if dont need this many labels
 localparam integer FIND_MAX_ITERATIONS = 8; // to prevent infinite loop in find, since loops in functions are combinational. Height of tree is O(log n) = 4
 
-reg [label_bits-1:0] parent [0:MAX_LABELS-1]; // C++ eq: vector<int> parent (MAX_LABELS);
-reg [3:0] rank [0:MAX_LABELS-1]; // C++ eq: vector<int> rank (MAX_LABELS); 
-reg active_root [0:MAX_LABELS-1]; // boolean array marking whether a component ID is in use as a root
-reg [label_bits-1:0] next_label; // next unused label n0.
+(* ram_style = "distributed" *) reg [label_bits-1:0] parent [0:MAX_LABELS-1]; // C++ eq: vector<int> parent (MAX_LABELS);
+(* ram_style = "distributed" *) reg [3:0] rank [0:MAX_LABELS-1]; // C++ eq: vector<int> rank (MAX_LABELS); 
+(* ram_style = "distributed" *) reg active_root [0:MAX_LABELS-1]; // boolean array marking whether a component ID is in use as a root
+(* ram_style = "distributed" *) reg [label_bits-1:0] next_label; // next unused label n0.
 
 // stats for each component (hence only store for root pixel, where parent[label] == label)
 // centroid_x = sum_x / area ; centroid_y = sum_y / area
-reg [23:0] area [0:MAX_LABELS-1]; // number of pixels in this component
-reg [31:0] sum_x [0:MAX_LABELS-1]; // sum of x coordinates of pixels in this component
-reg [31:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
-reg [x_bitsize-1:0] min_x [0:MAX_LABELS-1]; 
-reg [x_bitsize-1:0] max_x [0:MAX_LABELS-1]; 
-reg [y_bitsize-1:0] min_y [0:MAX_LABELS-1]; 
-reg [y_bitsize-1:0] max_y [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [16:0] area [0:MAX_LABELS-1]; // number of pixels in this component
+(* ram_style = "distributed" *) reg [15:0] sum_x [0:MAX_LABELS-1]; // sum of x coordinates of pixels in this component
+(* ram_style = "distributed" *) reg [15:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
+(* ram_style = "distributed" *) reg [x_bitsize-1:0] min_x [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [x_bitsize-1:0] max_x [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [y_bitsize-1:0] min_y [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [y_bitsize-1:0] max_y [0:MAX_LABELS-1]; 
 
 
 // retrieve the reduced neighbour pixel's labels 
@@ -106,38 +106,38 @@ wire [label_bits-1:0] upright_label = (x == WIDTH-1 || y == 0) ? 0 :
                                    (toggle_line == 0) ? row0_labels[x+1] : row1_labels[x+1];
 
 // temporary registers to read and write neighbour labels
-reg [label_bits-1:0] left;
-reg [label_bits-1:0] up;
-reg [label_bits-1:0] upleft;
-reg [label_bits-1:0] upright;
-reg [label_bits-1:0] root_left;
-reg [label_bits-1:0] root_up;
-reg [label_bits-1:0] root_upleft;
-reg [label_bits-1:0] root_upright;
-reg [label_bits-1:0] R; // final root label for current pixel
-reg [label_bits-1:0] R_next; // temp to get next smallest root
+(* ram_style = "distributed" *) reg [label_bits-1:0] left;
+(* ram_style = "distributed" *) reg [label_bits-1:0] up;
+(* ram_style = "distributed" *) reg [label_bits-1:0] upleft;
+(* ram_style = "distributed" *) reg [label_bits-1:0] upright;
+(* ram_style = "distributed" *) reg [label_bits-1:0] root_left;
+(* ram_style = "distributed" *) reg [label_bits-1:0] root_up;
+(* ram_style = "distributed" *) reg [label_bits-1:0] root_upleft;
+(* ram_style = "distributed" *) reg [label_bits-1:0] root_upright;
+(* ram_style = "distributed" *) reg [label_bits-1:0] R; // final root label for current pixel
+(* ram_style = "distributed" *) reg [label_bits-1:0] R_next; // temp to get next smallest root
 
 // temporary counters to help me walk along the width and labels during a sweep, to not touch global ref for x coord 
-reg [x_bitsize-1:0] init_width_idx;
-reg [label_bits-1:0] init_label_idx;
+(* ram_style = "distributed" *) reg [x_bitsize-1:0] init_width_idx;
+(* ram_style = "distributed" *) reg [label_bits-1:0] init_label_idx;
 
 // temporary registers to help in find() aka the find engine
 // reg [label_bits-1:0] find_curr; // used in S_FIND_* states to follow parents to find root of component iteratively
 
 // temporary registers to help in union() aka the union engine (which uses find engine twice, then attach and merge stats)
-reg [label_bits-1:0] ua, ub; // inputs
-reg [label_bits-1:0] ra, rb; // roots
+(* ram_style = "distributed" *) reg [label_bits-1:0] ua, ub; // inputs
+(* ram_style = "distributed" *) reg [label_bits-1:0] ra, rb; // roots
 
 // wire [label_bits-1:0] parent_curr = parent[find_curr];
 // wire [label_bits-1:0] rootR_now = (parent[R]==R) ? R : parent[R]; // root of R now (after a union)
 
-reg [label_bits-1:0] tmp;
-reg curr_pix_q;
+(* ram_style = "distributed" *) reg [label_bits-1:0] tmp;
+(* ram_style = "distributed" *) reg curr_pix_q;
 
 // output stuff
-reg [23:0] ua_area_new;         // next area when adding a pixel
-reg [23:0] best_area;           // running largest area
-reg [label_bits-1:0] best_lbl;  // label of current best
+(* ram_style = "distributed" *) reg [16:0] ua_area_new;         // next area when adding a pixel
+(* ram_style = "distributed" *) reg [16:0] best_area;           // running largest area
+(* ram_style = "distributed" *) reg [label_bits-1:0] best_lbl;  // label of current best
 
 
 

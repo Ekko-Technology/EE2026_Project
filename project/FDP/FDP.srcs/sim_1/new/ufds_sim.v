@@ -26,6 +26,7 @@ module ufds_sim(    );
 // Verifies neighbor helpers return zeros on the first line (edges)
 // Verifies U/UL/UR fetch from the previous row when we preload labels between lines
 
+    // Drive a full 306x240 frame through the Bridge so FS/LS/FE are correct
     localparam integer IMG_W = 24;
     localparam integer IMG_H = 12;
 
@@ -36,22 +37,33 @@ module ufds_sim(    );
     wire [7:0] bbox_top,  bbox_bottom, centroid_y;
     wire ready_o;
 
-    reg  p_valid_r, p_fs_r, p_ls_r, p_fe_r, p_px_r;
+    // Producer-side regs (match Bridge port widths)
+    reg  p_valid_r, p_px_r;
+    reg  [8:0] p_x_r; // 0..305
+    reg  [7:0] p_y_r; // 0..239
+
+    // Streaming coordinates
+    integer x, y;
+
     always @(posedge pclk) begin
         p_valid_r <= in_valid;
-        p_fs_r    <= frame_start;
-        p_ls_r    <= line_start;
-        p_fe_r    <= frame_end;
+        // p_fs_r    <= frame_start;
+        // p_ls_r    <= line_start;
+        // p_fe_r    <= frame_end;
+        p_x_r <= x;
+        p_y_r <= y;
         p_px_r    <= curr_pix;
     end
 
-    // 100 MHz
+    // 100 MHz and 25 MHz
     always #5 clk = ~clk;
     always #20 pclk = ~pclk;  // 40 ns
 
+    
+
     UFDS_Bridge dut (
         .pclk(pclk), .p_rst(p_rst),
-        .p_valid(p_valid_r), .p_fs(p_fs_r), .p_ls(p_ls_r), .p_fe(p_fe_r), .p_px(p_px_r),
+        .p_valid(p_valid_r), .p_x(p_x_r), .p_y(p_y_r), .p_px(p_px_r),
         .clk(clk), .ext_reset(rst),
         .bbox_left(bbox_left), .bbox_right(bbox_right),
         .bbox_top(bbox_top), .bbox_bottom(bbox_bottom),
@@ -76,19 +88,19 @@ module ufds_sim(    );
     endfunction
 
     // Push one pixel: assert on posedge, deassert on negedge (matches DUT sampling)
-    task push_pixel(input   fs, input   ls, input   px);
+    task push_pixel(input integer x, input integer y, input integer px);
     begin
         // wait (dut.state == dut.S_READY);
         @(posedge pclk);
         curr_pix    = px;
         in_valid   = 1'b1;
-        frame_start = fs;
-        line_start  = ls;
+        // frame_start = fs;
+        // line_start  = ls;
         @(negedge pclk);
         in_valid    = 1'b0;
-        frame_start = 1'b0;
-        frame_end  = 1'b0;
-        line_start  = 1'b0;
+        // frame_start = 1'b0;
+        // frame_end  = 1'b0;
+        // line_start  = 1'b0;
     end
     endtask
 
@@ -146,8 +158,11 @@ module ufds_sim(    );
     endtask
 
     // Optional: assert no X on neighbors when accepting a pixel
+reg accept_d;
 always @(posedge clk) begin
-    if (dut.u_ufds.state==dut.u_ufds.S_READY && in_valid) begin
+    // Delay the check by 1 cycle to allow x/y and neighbor wires to settle after line_start resets
+    accept_d <= (dut.u_ufds.state==dut.u_ufds.S_READY && dut.in_valid_q);
+    if (accept_d) begin
         if ((^dut.u_ufds.left_label)    === 1'bx ||
             (^dut.u_ufds.up_label)      === 1'bx ||
             (^dut.u_ufds.upleft_label)  === 1'bx ||
@@ -158,7 +173,7 @@ always @(posedge clk) begin
     end
 end
 
-    integer x, y;
+    
     initial begin
         // Reset
         repeat (8) @(posedge clk);
@@ -167,16 +182,16 @@ end
         // Wait DUT ready
         #44150;
 
-        // Stream the 24x12 frame
+        // Stream the full 306x240 frame; only a 24x12 region has foreground
         for (y=0; y<IMG_H; y=y+1) begin
             for (x=0; x<IMG_W; x=x+1) begin
-                push_pixel((y==0 && x==0), (x==0), fg(x,y));
+                push_pixel(x, y, fg(x,y));
                 // wait (dut.state == dut.S_READY);
             end
         end
 
-        // Drain merges
-        repeat (1000) @(posedge clk);
+        // Drain any in-flight merges
+        repeat (2000) @(posedge clk);
 
         // Checks
         check_component(12, 2, 5, 1, 3);   // A

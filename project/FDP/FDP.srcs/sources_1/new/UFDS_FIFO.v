@@ -18,15 +18,15 @@ module UFDS_FIFO #(
     localparam DEPTH = (1 << ADDR_BITS);
 
     // Memory
-    reg [WIDTH-1:0] mem [0:DEPTH-1];
+    (* ram_style = "distributed" *) reg [WIDTH-1:0] mem [0:DEPTH-1];
 
     // Binary and Gray pointers
-    reg [ADDR_BITS:0] wr_bin = 0, rd_bin = 0;
-    reg [ADDR_BITS:0] wr_gray = 0, rd_gray = 0;
+    (* ram_style = "distributed" *) reg [ADDR_BITS:0] wr_bin = 0, rd_bin = 0;
+    (* ram_style = "distributed" *) reg [ADDR_BITS:0] wr_gray = 0, rd_gray = 0;
 
     // Synchronizers for cross-domain Gray pointers
-    reg [ADDR_BITS:0] rd_gray_w1=0, rd_gray_w2=0;
-    reg [ADDR_BITS:0] wr_gray_r1=0, wr_gray_r2=0;
+    (* ram_style = "distributed" *) reg [ADDR_BITS:0] rd_gray_w1=0, rd_gray_w2=0;
+    (* ram_style = "distributed" *) reg [ADDR_BITS:0] wr_gray_r1=0, wr_gray_r2=0;
 
     // Bin<->Gray helpers
     wire [ADDR_BITS:0] wr_bin_n = wr_bin + (wr_en & ~wr_full);
