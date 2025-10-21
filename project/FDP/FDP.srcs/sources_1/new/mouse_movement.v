@@ -105,26 +105,28 @@ module mouse_movement(
     localparam MAX_MOVE = 20;// ignore fast delta movements
 
     // Servo update smoothing, where servo angles are only updated every SMOOTH_DIV cycles
-    localparam SMOOTH_DIV = 100_000; // 1 ms update at 100 MHz
-    reg [16:0] smooth_counter = 0;
-    reg smooth_tick = 0;
+    // localparam SMOOTH_DIV = 100_000; // 1 ms update at 100 MHz
+    // reg [16:0] smooth_counter = 0;
+    // reg smooth_tick = 0;
 
-    always @(posedge clk) begin
-        if (smooth_counter >= SMOOTH_DIV-1) begin
-            smooth_counter <= 0;
-            smooth_tick <= 1;
-        end else begin
-            smooth_counter <= smooth_counter + 1;
-            smooth_tick <= 0;
-        end
-    end
+    // always @(posedge clk) begin
+    //     if (smooth_counter >= SMOOTH_DIV-1) begin
+    //         smooth_counter <= 0;
+    //         smooth_tick <= 1;
+    //     end else begin
+    //         smooth_counter <= smooth_counter + 1;
+    //         smooth_tick <= 0;
+    //     end
+    // end
 
     // Update servo angles every smooth_tick
     always @(posedge clk) begin
         if (btnU) begin
             servo_x_angle <= 90;
             servo_y_angle <= 90;
-        end else if (new_event && smooth_tick) begin
+        // end else if (new_event && smooth_tick) begin
+        end
+        else if (new_event) begin
             // Filter X
             if (delta_x > MIN_MOVE)
                 filtered_x = (delta_x > MAX_MOVE) ? MAX_MOVE : delta_x;
@@ -146,11 +148,11 @@ module mouse_movement(
             servo_y_angle <= servo_y_angle + filtered_y;
 
             // Clamp angles
-            if (servo_x_angle < 0) servo_x_angle <= 0;
-            else if (servo_x_angle > 180) servo_x_angle <= 180;
+            if (servo_x_angle < 0) servo_x_angle <= 1;
+            else if (servo_x_angle > 180) servo_x_angle <= 179;
 
-            if (servo_y_angle < 0) servo_y_angle <= 0;
-            else if (servo_y_angle > 180) servo_y_angle <= 180;
+            if (servo_y_angle < 0) servo_y_angle <= 1;
+            else if (servo_y_angle > 180) servo_y_angle <= 179;
         end
     end
     
