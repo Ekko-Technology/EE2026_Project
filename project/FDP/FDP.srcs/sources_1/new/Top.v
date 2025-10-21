@@ -19,13 +19,20 @@ module Top(
     output [11:0] vga_RGB    //4-bit red, 4-bit green, 4-bit blue
     );
 
+    localparam [23:0] RGB_THRESHOLD = {
+        4'hF, 4'hF, //R_MIN, R_MAX
+        4'hF, 4'hF, //G_MIN, G_MAX
+        4'hF, 4'hF  //B_MIN, B_MAX
+    };
+
     // ----------- CLOCKS ----------- //
     // Generate 25 MHz (for VGA) and 24 MHz (for camera) clocks from 100 MHz input
-    wire clk_status, clk25, clk24;
+    wire clk_status, clk25, clk24, clk50;
     display_clocks disp_clocks(
         .clk_in1(clk),
         .clk_out1(clk25),
         .clk_out2(clk24),
+        .clk_out3(clk50),
         .reset(btnU),
         .locked(clk_status)
     );
@@ -156,24 +163,63 @@ module Top(
         .addr_out(filtered_addr_gauss_3x3),
         .pixel_valid(pixel_valid_gauss_3x3)
     );
-    
-    wire pixel_valid = pixel_valid_gauss_3x3;
-    wire [11:0] filtered_pixel = filtered_pixel_gauss_3x3;
-    wire [17:0] filtered_addr  = filtered_addr_gauss_3x3;
 
-    // Unified write controls for both RGB frame buffer and 1-bit bitmap buffer
-    // Share write enable and address; keep separate data for RGB (12-bit) and bitmap (1-bit)
-    reg        we_w;            // common write enable for both memories
-    reg [17:0] waddr18_r;       // common write address for both memories (absolute with base)
-    reg [11:0] rgb_dina_r;      // RGB data to image_mem
-    reg        bmp_dina_r;      // bitmap data to Dual_Port_Buffer
-    // Single pending entry for filtered overwrite (affects both memories)
-    reg        pend;            // pending filtered write
-    reg [17:0] pend_addr_q;     // absolute address for filtered center
-    reg [11:0] fpix_q;          // latched filtered RGB pixel
-    reg        bdin_q;          // latched filtered bitmap bit
+    //----------- MORPHOLOGY (ERODE/DILATE) ----------- //
+    // Explicit binary thresholds (reuse for writer and morphology)
+    wire threshold_bin_gauss = (((filtered_pixel_gauss_3x3[3:0] >= RGB_THRESHOLD[23:20]) && (filtered_pixel_gauss_3x3[3:0] <= RGB_THRESHOLD[19:16]) &&
+                                 (filtered_pixel_gauss_3x3[7:4] >= RGB_THRESHOLD[15:12]) && (filtered_pixel_gauss_3x3[7:4] <= RGB_THRESHOLD[11:8]) &&
+                                 (filtered_pixel_gauss_3x3[11:8] >= RGB_THRESHOLD[7:4]) && (filtered_pixel_gauss_3x3[11:8] <= RGB_THRESHOLD[3:0])) ? 1'b1 : 1'b0);
+    wire threshold_bin_raw   = (((dout[3:0]  >= RGB_THRESHOLD[23:20]) && (dout[3:0]  <= RGB_THRESHOLD[19:16]) &&
+                                 (dout[7:4]  >= RGB_THRESHOLD[15:12]) && (dout[7:4]  <= RGB_THRESHOLD[11:8]) &&
+                                 (dout[11:8] >= RGB_THRESHOLD[7:4]) && (dout[11:8] <= RGB_THRESHOLD[3:0])) ? 1'b1 : 1'b0);
 
-    
+    wire pixel_valid_erode_3x3;
+    wire filtered_pixel_erode_3x3;
+    wire [17:0] filtered_addr_erode_3x3;
+    Morphology_3x3 #(
+        .IMAGE_WIDTH(306),
+        .IMAGE_HEIGHT(240)
+    ) erode3x3 (
+        .clk(ov7670_pclk),
+        .reset(cap_reset),
+        .frame_start(ov7670_vsync),
+        .we(pixel_valid_gauss_3x3),
+        // morphology operates on gaussian-thresholded pixels
+        .pixel_in(threshold_bin_gauss),
+        .op_dilate(1'b0),
+        .pixel_out(filtered_pixel_erode_3x3),
+        .addr_out(filtered_addr_erode_3x3),
+        .pixel_valid(pixel_valid_erode_3x3)
+    );
+
+    wire pixel_valid_dilate_3x3;
+    wire filtered_pixel_dilate_3x3;
+    wire [17:0] filtered_addr_dilate_3x3;
+    Morphology_3x3 #(
+        .IMAGE_WIDTH(306),
+        .IMAGE_HEIGHT(240)
+    ) dilate3x3 (
+        .clk(ov7670_pclk),
+        .reset(cap_reset),
+        .frame_start(ov7670_vsync),
+        .we(pixel_valid_erode_3x3),
+        .pixel_in(filtered_pixel_erode_3x3),
+        .op_dilate(1'b1),
+        .pixel_out(filtered_pixel_dilate_3x3),
+        .addr_out(filtered_addr_dilate_3x3),
+        .pixel_valid(pixel_valid_dilate_3x3)
+    );
+
+    // Select which binary pipeline to write into the bitmap buffer:
+    // sw[1] enables filtered pipeline in writer; sw[2] selects morphology; sw[3] chooses dilate(1)/erode(0)
+    wire bin_filtered_valid = (sw[2]) ? (sw[3] ? pixel_valid_dilate_3x3 : pixel_valid_erode_3x3)
+                                      : pixel_valid_gauss_3x3;
+    wire [17:0] bin_filtered_addr = (sw[2]) ? (sw[3] ? filtered_addr_dilate_3x3 : filtered_addr_erode_3x3)
+                                            : filtered_addr_gauss_3x3;
+    wire bin_filtered_bit   = (sw[2]) ? (sw[3] ? filtered_pixel_dilate_3x3 : filtered_pixel_erode_3x3)
+                                      : threshold_bin_gauss;
+
+
     //----------- PING PONG BUFFERS ----------- //
     //No hard guards or syncs now, both just triggering the BRAM upper/lower swap on Vsync
     //Seems to be working fine and no tears for now so f it we ball I guess
@@ -242,6 +288,72 @@ module Top(
         end
     end
 
+    // write control registers for both RGB frame buffer and 1-bit bitmap buffer
+    // reg rgb_we_w;   // write enable for RGB frame buffer
+    // reg bmp_we_w;   // write enable for bitmap buffer
+    // reg [17:0] rgb_waddr18_r; // write address for RGB frame buffer (absolute with base)
+    // reg [17:0] bmp_waddr18_r; // write address for bitmap buffer (absolute with base)
+    // reg [11:0] rgb_dina_r; // RGB data to image_mem
+    // reg bmp_dina_r; // bitmap data to Dual_Port_Buffer
+    // reg we_latch; // latch to detect first pclk high after we
+
+    // always @(posedge clk50) begin
+    //     if (cap_reset) begin
+    //         rgb_we_w <= 1'b0;
+    //         bmp_we_w <= 1'b0;
+    //         rgb_waddr18_r <= 18'd0;
+    //         bmp_waddr18_r <= 18'd0;
+    //         rgb_dina_r <= 12'd0;
+    //         bmp_dina_r <= 1'b0;
+    //         we_latch <= 1'b0;
+    //     end else begin
+    //         rgb_we_w <= 1'b0; // default no write
+    //         bmp_we_w <= 1'b0; // default no write
+
+    //         if (we && ~we_latch) begin
+    //             // new pixel data and first time polled high pclk, so just write raw thresholded pixel
+    //             we_latch <= 1'b1;
+    //             rgb_we_w <= 1'b1;
+    //             rgb_waddr18_r <= {1'b0, addr} + wr_base_frame;
+    //             rgb_dina_r <= dout;
+    //             // bitmap bit from raw pixel (same address as RGB)
+    //             bmp_we_w <= 1'b1;
+    //             bmp_waddr18_r <= {1'b0, addr} + wr_base_frame;
+    //             bmp_dina_r <= threshold_pixel;
+    //         end
+    //         else begin
+    //             if (!we && we_latch) begin
+    //                 // reset latch on pclk low
+    //                 we_latch <= 1'b0;
+    //             end
+    //             // either no new pixel data, or already read in current pclk high, so check convolution filters to overwrite old pixels
+    //             if (sw[1] && pixel_valid_gauss_3x3) begin
+    //                 //only edit bitmap based on filtered pixel
+    //                 bmp_we_w <= 1'b1;
+    //                 bmp_waddr18_r <= filtered_addr_gauss_3x3 + wr_base_frame;
+    //                 bmp_dina_r <= threshold_pixel;
+    //             end
+    //             // if (sw[2] && pixel_valid_erode_3x3) begin
+    //             //     //only edit bitmap based on filtered pixel
+    //             //     bmp_we_w <= 1'b1;
+    //             //     bmp_waddr18_r <= filtered_addr_erode_3x3 + wr_base_frame;
+    //             //     bmp_dina_r <= filtered_pixel_erode_3x3;
+    //             // end
+    //         end
+    //     end
+    // end
+
+    // Unified write controls for both RGB frame buffer and 1-bit bitmap buffer
+    // Share write enable and address; keep separate data for RGB (12-bit) and bitmap (1-bit)
+    reg        we_w;            // common write enable for both memories
+    reg [17:0] waddr18_r;       // common write address for both memories (absolute with base)
+    reg [11:0] rgb_dina_r;      // RGB data to image_mem
+    reg        bmp_dina_r;      // bitmap data to Dual_Port_Buffer
+    // Single pending entry for filtered overwrite (affects both memories)
+    reg        pend;            // pending filtered write
+    reg [17:0] pend_addr_q;     // absolute address for filtered center
+    reg        bdin_q;          // latched filtered bitmap bit
+
     // PCLK-domain writer:
     // - Image RGB: raw on we==1, filtered overwrite on we==0
     // - Bitmap 1-bit: raw-threshold on we==1, filtered-threshold overwrite on we==0
@@ -253,20 +365,16 @@ module Top(
             bmp_dina_r <= 1'b0;
             pend <= 1'b0;
             pend_addr_q <= 18'd0;
-            fpix_q <= 12'd0;
             bdin_q <= 1'b0;
         end else begin
             we_w <= 1'b0; // default no write; assert exactly once per cycle below
 
             // Latch a pending filtered write only when we==1 (raw write occupies the port).
-            if (we && sw[1] && pixel_valid && !pend) begin
+            if (we && sw[1] && bin_filtered_valid && !pend) begin
                 pend <= 1'b1;
-                pend_addr_q <= filtered_addr + wr_base_frame; // absolute address in the latched frame half
-                fpix_q <= filtered_pixel;
-                // bitmap bit from filtered pixel (same address as RGB)
-                bdin_q <= ((filtered_pixel[3:0]  >= 4'h6) && (filtered_pixel[3:0]  <= 4'hF) &&
-                           (filtered_pixel[7:4]  >= 4'h3) && (filtered_pixel[7:4]  <= 4'hA) &&
-                           (filtered_pixel[11:8] >= 4'h0) && (filtered_pixel[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
+                pend_addr_q <= bin_filtered_addr + wr_base_frame; // absolute address in the latched frame half
+                // bitmap bit from selected filtered pipeline (same address as RGB)
+                bdin_q <= bin_filtered_bit;
             end
 
             // On the non-pixel cycles (we==0):
@@ -275,16 +383,14 @@ module Top(
             if (!we) begin
                 if (pend) begin
                     waddr18_r  <= pend_addr_q;
-                    rgb_dina_r <= fpix_q;
+                    // rgb_dina_r <= fpix_q;    // choose not to overwrite rgb frame
                     bmp_dina_r <= bdin_q;
                     we_w <= 1'b1;
                     pend <= 1'b0;
-                end else if (sw[1] && pixel_valid) begin
-                    waddr18_r  <= filtered_addr + wr_base_frame;
-                    rgb_dina_r <= filtered_pixel;
-                    bmp_dina_r <= ((filtered_pixel[3:0]  >= 4'h6) && (filtered_pixel[3:0]  <= 4'hF) &&
-                                   (filtered_pixel[7:4]  >= 4'h3) && (filtered_pixel[7:4]  <= 4'hA) &&
-                                   (filtered_pixel[11:8] >= 4'h0) && (filtered_pixel[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
+                end else if (sw[1] && bin_filtered_valid) begin
+                    waddr18_r  <= bin_filtered_addr + wr_base_frame;
+                    // rgb_dina_r <= filtered_pixel;    // choose not to overwrite rgb frame
+                    bmp_dina_r <= bin_filtered_bit;
                     we_w <= 1'b1;
                 end
             end
@@ -293,15 +399,13 @@ module Top(
             if (we) begin
                 waddr18_r  <= {1'b0, addr} + wr_base_frame;
                 rgb_dina_r <= dout;
-                bmp_dina_r <= ((dout[3:0]  >= 4'h6) && (dout[3:0]  <= 4'hF) &&
-                                   (dout[7:4]  >= 4'h6) && (dout[7:4]  <= 4'hF) &&
-                                   (dout[11:8] >= 4'h0) && (dout[11:8] <= 4'h5)) ? 1'b1 : 1'b0;
+                bmp_dina_r <= threshold_bin_raw;
                 we_w <= 1'b1;
             end
         end
     end
 
-    image_mem frame_buffer(
+    image_mem frame_buffer( 
         .clka(ov7670_pclk),
         .wea(we_w),
         .addra(waddr18_r),

@@ -1,7 +1,7 @@
 // Copyright 1986-2018 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2018.2 (lin64) Build 2258646 Thu Jun 14 20:02:38 MDT 2018
-// Date        : Tue Oct 14 20:18:29 2025
+// Date        : Tue Oct 21 18:42:02 2025
 // Host        : kc-ThinkPad-T14-Gen-5 running 64-bit Ubuntu 22.04.5 LTS
 // Command     : write_verilog -force -mode funcsim
 //               /media/kc/Data/EE2026/project/FDP/FDP.runs/display_clocks_synth_1/display_clocks_sim_netlist.v
@@ -16,11 +16,13 @@
 module display_clocks
    (clk_out1,
     clk_out2,
+    clk_out3,
     reset,
     locked,
     clk_in1);
   output clk_out1;
   output clk_out2;
+  output clk_out3;
   input reset;
   output locked;
   input clk_in1;
@@ -28,6 +30,7 @@ module display_clocks
   (* IBUF_LOW_PWR *) wire clk_in1;
   wire clk_out1;
   wire clk_out2;
+  wire clk_out3;
   wire locked;
   wire reset;
 
@@ -35,6 +38,7 @@ module display_clocks
        (.clk_in1(clk_in1),
         .clk_out1(clk_out1),
         .clk_out2(clk_out2),
+        .clk_out3(clk_out3),
         .locked(locked),
         .reset(reset));
 endmodule
@@ -43,11 +47,13 @@ endmodule
 module display_clocks_display_clocks_clk_wiz
    (clk_out1,
     clk_out2,
+    clk_out3,
     reset,
     locked,
     clk_in1);
   output clk_out1;
   output clk_out2;
+  output clk_out3;
   input reset;
   output locked;
   input clk_in1;
@@ -58,11 +64,12 @@ module display_clocks_display_clocks_clk_wiz
   wire clk_out1_display_clocks;
   wire clk_out2;
   wire clk_out2_display_clocks;
+  wire clk_out3;
+  wire clk_out3_display_clocks;
   wire clkfbout_buf_display_clocks;
   wire clkfbout_display_clocks;
   wire locked;
   wire reset;
-  wire NLW_plle2_adv_inst_CLKOUT2_UNCONNECTED;
   wire NLW_plle2_adv_inst_CLKOUT3_UNCONNECTED;
   wire NLW_plle2_adv_inst_CLKOUT4_UNCONNECTED;
   wire NLW_plle2_adv_inst_CLKOUT5_UNCONNECTED;
@@ -91,6 +98,10 @@ module display_clocks_display_clocks_clk_wiz
        (.I(clk_out2_display_clocks),
         .O(clk_out2));
   (* BOX_TYPE = "PRIMITIVE" *) 
+  BUFG clkout3_buf
+       (.I(clk_out3_display_clocks),
+        .O(clk_out3));
+  (* BOX_TYPE = "PRIMITIVE" *) 
   PLLE2_ADV #(
     .BANDWIDTH("OPTIMIZED"),
     .CLKFBOUT_MULT(12),
@@ -103,7 +114,7 @@ module display_clocks_display_clocks_clk_wiz
     .CLKOUT1_DIVIDE(50),
     .CLKOUT1_DUTY_CYCLE(0.500000),
     .CLKOUT1_PHASE(0.000000),
-    .CLKOUT2_DIVIDE(1),
+    .CLKOUT2_DIVIDE(24),
     .CLKOUT2_DUTY_CYCLE(0.500000),
     .CLKOUT2_PHASE(0.000000),
     .CLKOUT3_DIVIDE(1),
@@ -115,7 +126,7 @@ module display_clocks_display_clocks_clk_wiz
     .CLKOUT5_DIVIDE(1),
     .CLKOUT5_DUTY_CYCLE(0.500000),
     .CLKOUT5_PHASE(0.000000),
-    .COMPENSATION("ZHOLD"),
+    .COMPENSATION("BUF_IN"),
     .DIVCLK_DIVIDE(1),
     .IS_CLKINSEL_INVERTED(1'b0),
     .IS_PWRDWN_INVERTED(1'b0),
@@ -131,7 +142,7 @@ module display_clocks_display_clocks_clk_wiz
         .CLKINSEL(1'b1),
         .CLKOUT0(clk_out1_display_clocks),
         .CLKOUT1(clk_out2_display_clocks),
-        .CLKOUT2(NLW_plle2_adv_inst_CLKOUT2_UNCONNECTED),
+        .CLKOUT2(clk_out3_display_clocks),
         .CLKOUT3(NLW_plle2_adv_inst_CLKOUT3_UNCONNECTED),
         .CLKOUT4(NLW_plle2_adv_inst_CLKOUT4_UNCONNECTED),
         .CLKOUT5(NLW_plle2_adv_inst_CLKOUT5_UNCONNECTED),
