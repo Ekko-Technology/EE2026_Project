@@ -12,8 +12,18 @@ module UFDS_Bridge (
     input  wire ext_reset,
 
     // UFDS single-bbox outputs
-    output wire [9:0] bbox_left, bbox_right, centroid_x,
-    output wire [8:0] bbox_top,  bbox_bottom, centroid_y,
+    // output wire [9:0] bbox_left, bbox_right, centroid_x,
+    // output wire [8:0] bbox_top,  bbox_bottom, centroid_y,
+
+    // UFDS top-4 concatenated outputs passthrough
+    output wire [39:0] comp3210_left,
+    output wire [39:0] comp3210_right,
+    output wire [35:0] comp3210_top,
+    output wire [35:0] comp3210_bottom,
+    output wire [39:0] comp3210_cx,
+    output wire [35:0] comp3210_cy,
+    output wire [63:0] comp3210_area,
+    output wire [2:0]  comp_count,
 
     // Bridge ready (mirrors UFDS ready)
     output wire ready_o
@@ -63,12 +73,21 @@ module UFDS_Bridge (
 
         .ready_to_read(ready_i),
 
-        .bbox_left(bbox_left),
-        .bbox_right(bbox_right),
-        .bbox_top(bbox_top),
-        .bbox_bottom(bbox_bottom),
-        .centroid_x(centroid_x),
-        .centroid_y(centroid_y)
+        // .bbox_left(bbox_left),
+        // .bbox_right(bbox_right),
+        // .bbox_top(bbox_top),
+        // .bbox_bottom(bbox_bottom),
+        // .centroid_x(centroid_x),
+        // .centroid_y(centroid_y),
+
+        .comp3210_left(comp3210_left),
+        .comp3210_right(comp3210_right),
+        .comp3210_top(comp3210_top),
+        .comp3210_bottom(comp3210_bottom),
+        .comp3210_cx(comp3210_cx),
+        .comp3210_cy(comp3210_cy),
+        .comp3210_area(comp3210_area),
+        .comp_count(comp_count)
     );
 
     // Simple 1-word read buffer to align to UFDS ready
