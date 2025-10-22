@@ -27,6 +27,9 @@ module mouse_movement(
     input [8:0] y_coord, // pixel index height
     inout mouse_clk,  //PS2 mouse clock
     inout mouse_data,  //PS2 data packets
+    `ifdef SIMULATION
+        input left_sim, // simulation-only input to simulate left clicks
+    `endif
     output servo_x_pwm, // PWM signal for X servo
     output servo_y_pwm, // PWM signal for Y servo
     output reg [15:0] led,  //Bullet counts
@@ -66,22 +69,6 @@ module mouse_movement(
     reg signed [15:0] delta_x;
     reg signed [15:0] delta_y;
 
-    always @(posedge clk) begin
-        if (btnU) begin
-            prev_xpos <= xpos;
-            prev_ypos <= ypos;
-            delta_x <= 0;
-            delta_y <= 0;
-        end else if (new_event) begin
-            delta_x <= $signed(xpos) - $signed(prev_xpos);
-            delta_y <= $signed(ypos) - $signed(prev_ypos);
-
-            prev_xpos <= xpos;
-            prev_ypos <= ypos;
-        end
-    end
-
-
     // Servo angles
     reg signed [15:0] servo_x_angle;
     reg signed [15:0] servo_y_angle;
@@ -94,29 +81,25 @@ module mouse_movement(
     localparam MIN_MOVE = 2; // ignore slow delta movements
     localparam MAX_MOVE = 20;// ignore fast delta movements
 
-    // Servo update smoothing, where servo angles are only updated every SMOOTH_DIV cycles
-    // localparam SMOOTH_DIV = 100_000; // 1 ms update at 100 MHz
-    // reg [16:0] smooth_counter = 0;
-    // reg smooth_tick = 0;
-
-    // always @(posedge clk) begin
-    //     if (smooth_counter >= SMOOTH_DIV-1) begin
-    //         smooth_counter <= 0;
-    //         smooth_tick <= 1;
-    //     end else begin
-    //         smooth_counter <= smooth_counter + 1;
-    //         smooth_tick <= 0;
-    //     end
-    // end
-
     // Update servo angles every smooth_tick
     always @(posedge clk) begin
         if (btnU) begin
+            prev_xpos <= xpos;
+            prev_ypos <= ypos;
+            delta_x <= 0;
+            delta_y <= 0;
             servo_x_angle <= 90;
             servo_y_angle <= 90;
-        // end else if (new_event && smooth_tick) begin
+        end else if (new_event) begin
+            delta_x <= $signed(xpos) - $signed(prev_xpos);
+            delta_y <= $signed(ypos) - $signed(prev_ypos);
+
+            prev_xpos <= xpos;
+            prev_ypos <= ypos;
         end
-        else if (new_event) begin
+
+    
+        if (new_event) begin
             // Filter X
             if (delta_x > MIN_MOVE)
                 filtered_x = (delta_x > MAX_MOVE) ? MAX_MOVE : delta_x;
@@ -138,11 +121,11 @@ module mouse_movement(
             servo_y_angle <= servo_y_angle + filtered_y;
 
             // Clamp angles
-            if (servo_x_angle < 0) servo_x_angle <= 1;
-            else if (servo_x_angle > 180) servo_x_angle <= 179;
+            if ((servo_x_angle + filtered_x) < 0) servo_x_angle <= 1;
+            else if ((servo_x_angle + filtered_x) > 180) servo_x_angle <= 179;
 
-            if (servo_y_angle < 0) servo_y_angle <= 1;
-            else if (servo_y_angle > 180) servo_y_angle <= 179;
+            if ((servo_y_angle + filtered_y) < 0) servo_y_angle <= 1;
+            else if ((servo_y_angle + filtered_y) > 180) servo_y_angle <= 179;
         end
     end
     
@@ -151,23 +134,30 @@ module mouse_movement(
     reg servo_x_out;
     reg servo_y_out;
 
+    // reg [20:0] pulse_widths [0:180];
+
+    // integer i = 0;
+    // initial begin
+    //     for (i = 0; i <= 180; i = i + 1) begin
+    //         pulse_widths[i] = 100_000 + (i * 100_000 / 180);
+    //     end
+    // end
+    // Convert servo angle (0–180 degrees) to pulse width (1 ms – 2 ms)
+    wire [20:0] pulse_width_x = 100_000 + ((180 - servo_x_angle) * 100_000 / 180);
+    wire [20:0] pulse_width_y = 100_000 + (servo_y_angle * 100_000 / 180);
+
     always @(posedge clk) begin
         // Reset counter every 20 ms as most servo motors works with such
         if (pwm_counter >= 2_000_000 - 1)
             pwm_counter <= 0;
         else
             pwm_counter <= pwm_counter + 1;
-    end
-
-    // Convert servo angle (0–180 degrees) to pulse width (1 ms – 2 ms)
-    wire [20:0] pulse_width_x = 100_000 + (servo_x_angle * 100_000 / 180);
-    wire [20:0] pulse_width_y = 100_000 + (servo_y_angle * 100_000 / 180);
-
-    // Generate PWM
-    always @(posedge clk) begin
         servo_x_out <= (pwm_counter < pulse_width_x);
         servo_y_out <= (pwm_counter < pulse_width_y);
     end
+
+    // wire [20:0] pulse_width_x = pulse_widths[(180 - servo_x_angle)];
+    // wire [20:0] pulse_width_y = pulse_widths[servo_y_angle];
 
     assign servo_x_pwm = servo_x_out;
     assign servo_y_pwm = servo_y_out;
