@@ -12,8 +12,8 @@ module UFDS_Bridge (
     input  wire ext_reset,
 
     // UFDS single-bbox outputs
-    output wire [8:0] bbox_left, bbox_right, centroid_x,
-    output wire [7:0] bbox_top,  bbox_bottom, centroid_y,
+    output wire [9:0] bbox_left, bbox_right, centroid_x,
+    output wire [8:0] bbox_top,  bbox_bottom, centroid_y,
 
     // Bridge ready (mirrors UFDS ready)
     output wire ready_o

@@ -41,12 +41,12 @@ module UFDS_Detector(
     input  wire frame_end,     // pulse after last active pixel
     input  wire curr_pix,      // every pixel that is coming in
 
-    output reg [8:0] bbox_left,
-    output reg [8:0] bbox_right,
-    output reg [7:0] bbox_top,
-    output reg [7:0] bbox_bottom,
-    output reg [8:0] centroid_x,
-    output reg [7:0] centroid_y,
+    output reg [9:0] bbox_left,
+    output reg [9:0] bbox_right,
+    output reg [8:0] bbox_top,
+    output reg [8:0] bbox_bottom,
+    output reg [9:0] centroid_x,
+    output reg [8:0] centroid_y,
     output wire ready_to_read
 
     );
@@ -613,12 +613,12 @@ always @(posedge clk) begin
                 if (area[ua] + 1 > best_area) begin
                     best_area <= area[ua] + 1;
                     best_lbl <= ua;
-                    bbox_left <= (x < min_x[ua]) ? x : min_x[ua];
-                    bbox_right <= (x > max_x[ua]) ? x : max_x[ua];
-                    bbox_top <= (y < min_y[ua]) ? y : min_y[ua];
-                    bbox_bottom <= (y > max_y[ua]) ? y : max_y[ua];
-                    centroid_x <= (sum_x[ua] + x) / (area[ua] + 1);
-                    centroid_y <= (sum_y[ua] + y) / (area[ua] + 1);
+                    bbox_left = (x < min_x[ua]) ? x : min_x[ua];
+                    bbox_right = (x > max_x[ua]) ? x : max_x[ua];
+                    bbox_top = (y < min_y[ua]) ? y : min_y[ua];
+                    bbox_bottom = (y > max_y[ua]) ? y : max_y[ua];
+                    centroid_x <= (bbox_left + bbox_right) >> 1;
+                    centroid_y <= (bbox_top + bbox_bottom) >> 1;
                 end
 
                 state <= S_ADVANCE;

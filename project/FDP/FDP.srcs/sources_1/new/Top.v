@@ -23,9 +23,9 @@ module Top(
     );
 
     localparam [23:0] RGB_THRESHOLD = {
-        4'hF, 4'hF, //R_MIN, R_MAX
+        4'hF, 4'hF, //B_MIN, B_MAX
         4'hF, 4'hF, //G_MIN, G_MAX
-        4'hF, 4'hF  //B_MIN, B_MAX
+        4'hF, 4'hF  //R_MIN, R_MAX
     };
 
     // ----------- CLOCKS ----------- //
@@ -466,7 +466,7 @@ module Top(
 
     // Show middle pixel value on LEDs for debugging
     always @(posedge clk25) begin
-        if (active_area && (frame_addr == 38240)) begin
+        if (active_area && (frame_addr == 36567)) begin
             ss_output[11:0] <= image_pixel;
         end else begin
             ss_output[11:0] <= ss_output[11:0];
@@ -476,8 +476,8 @@ module Top(
 
     // ----------- UFDS BRIDGE FOR FIND CONTOURS ----------- //
 
-    wire [8:0] bbox_left, bbox_right, centroid_x;
-    wire [7:0] bbox_top, bbox_bottom, centroid_y;
+    wire [9:0] bbox_left, bbox_right, centroid_x;
+    wire [8:0] bbox_top, bbox_bottom, centroid_y;
     wire ready_o;
     // Only feed UFDS within the 306x240 cropped active area (x in [14,319], y in [0,239])
     wire in_roi = active_area && (frame_x[9:1] >= 10'd14) && (frame_x[9:1] < 10'd320) && (frame_y[9:1] < 10'd240);
@@ -560,8 +560,7 @@ module Top(
             centroid_y_latch  <= centroid_y;
         end else begin
             // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            if (
-                frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
+            if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
                 frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
                 frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
                 frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
@@ -570,11 +569,14 @@ module Top(
                 frame_pixel <= 12'h0F0;
             end
             else if (in_roi && 
-                (frame_x[9:1]-14 == bbox_left_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox left
-                frame_x[9:1]-14 == bbox_right_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox right
-                frame_y[9:1] == bbox_top_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||  //bbox top
-                frame_y[9:1] == bbox_bottom_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch   //bbox bottom
-            )
+                (
+                    frame_x[9:1]-14 == bbox_left_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox left
+                    frame_x[9:1]-14 == bbox_right_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox right
+                    frame_y[9:1] == bbox_top_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||  //bbox top
+                    frame_y[9:1] == bbox_bottom_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||  //bbox bottom
+                    frame_x[9:1]-14 == centroid_x_latch && frame_y[9:1] >= centroid_y_latch-2 && frame_y[9:1] <= centroid_y_latch+2 || //centroid vertical line
+                    frame_y[9:1] == centroid_y_latch && frame_x[9:1]-14 >= centroid_x_latch-2 && frame_x[9:1]-14 <= centroid_x_latch+2    //centroid horizontal line
+                )
             ) begin
                 frame_pixel <= 12'h00F;
             end
