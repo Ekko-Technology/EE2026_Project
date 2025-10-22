@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Top(
-    input clk, btnU,
+    input clk, btnU, btnC,
 
     output ov7670_pwdn, ov7670_reset, ov7670_xclk,
     input ov7670_href, ov7670_pclk, ov7670_vsync,
