@@ -27,13 +27,10 @@ module mouse_movement(
     input [8:0] y_coord, // pixel index height
     inout mouse_clk,  //PS2 mouse clock
     inout mouse_data,  //PS2 data packets
-`ifdef SIMULATION
-    input left_sim, // simulation-only input to simulate left clicks
-`endif
     output servo_x_pwm, // PWM signal for X servo
     output servo_y_pwm, // PWM signal for Y servo
     output reg [15:0] led,  //Bullet counts
-    output reg [11:0] vga_RGB
+    output reg [7:0] cooldown_progress
     );
     
     wire [11:0] xpos;
@@ -41,12 +38,6 @@ module mouse_movement(
     wire [3:0] zpos;
 
 // for simulation purposes
-`ifdef SIMULATION
-    wire left = left_sim;
-    wire right = 1'b0;
-    wire middle = 1'b0;
-    wire new_event = 1'b0;
-`else
     wire left, right, middle, new_event;
     
     MouseCtl mouse_instance (
@@ -67,7 +58,6 @@ module mouse_movement(
         .setmax_y(9'd480),
         .value(12'd1024)
     );
-`endif
 
     // capture the overall x and y movements of the mouse every clock edge
     reg signed [11:0] prev_xpos;
@@ -105,26 +95,28 @@ module mouse_movement(
     localparam MAX_MOVE = 20;// ignore fast delta movements
 
     // Servo update smoothing, where servo angles are only updated every SMOOTH_DIV cycles
-    localparam SMOOTH_DIV = 100_000; // 1 ms update at 100 MHz
-    reg [16:0] smooth_counter = 0;
-    reg smooth_tick = 0;
+    // localparam SMOOTH_DIV = 100_000; // 1 ms update at 100 MHz
+    // reg [16:0] smooth_counter = 0;
+    // reg smooth_tick = 0;
 
-    always @(posedge clk) begin
-        if (smooth_counter >= SMOOTH_DIV-1) begin
-            smooth_counter <= 0;
-            smooth_tick <= 1;
-        end else begin
-            smooth_counter <= smooth_counter + 1;
-            smooth_tick <= 0;
-        end
-    end
+    // always @(posedge clk) begin
+    //     if (smooth_counter >= SMOOTH_DIV-1) begin
+    //         smooth_counter <= 0;
+    //         smooth_tick <= 1;
+    //     end else begin
+    //         smooth_counter <= smooth_counter + 1;
+    //         smooth_tick <= 0;
+    //     end
+    // end
 
     // Update servo angles every smooth_tick
     always @(posedge clk) begin
         if (btnU) begin
             servo_x_angle <= 90;
             servo_y_angle <= 90;
-        end else if (new_event && smooth_tick) begin
+        // end else if (new_event && smooth_tick) begin
+        end
+        else if (new_event) begin
             // Filter X
             if (delta_x > MIN_MOVE)
                 filtered_x = (delta_x > MAX_MOVE) ? MAX_MOVE : delta_x;
@@ -146,11 +138,11 @@ module mouse_movement(
             servo_y_angle <= servo_y_angle + filtered_y;
 
             // Clamp angles
-            if (servo_x_angle < 0) servo_x_angle <= 0;
-            else if (servo_x_angle > 180) servo_x_angle <= 180;
+            if (servo_x_angle < 0) servo_x_angle <= 1;
+            else if (servo_x_angle > 180) servo_x_angle <= 179;
 
-            if (servo_y_angle < 0) servo_y_angle <= 0;
-            else if (servo_y_angle > 180) servo_y_angle <= 180;
+            if (servo_y_angle < 0) servo_y_angle <= 1;
+            else if (servo_y_angle > 180) servo_y_angle <= 179;
         end
     end
     
@@ -184,21 +176,21 @@ module mouse_movement(
 
     // Logic for Crosshair overlay and LED for ammo rounds 
     // Screen parameters
-    localparam WIDTH  = 320;
-    localparam HEIGHT = 240;
-    localparam CENTER_X = WIDTH / 2;  // 160
-    localparam CENTER_Y = HEIGHT / 2;  // 120
+    // localparam WIDTH  = 306;
+    // localparam HEIGHT = 240;
+    // localparam CENTER_X = WIDTH / 2;  // 153
+    // localparam CENTER_Y = HEIGHT / 2;  // 120
     
-    // Crosshair parameters
-    localparam CH_HEIGHT = 20;
-    localparam CH_WIDTH  = 20;
-    localparam CH_THICKNESS = 3;
-    localparam CH_CENTER_DOT_THICKNESS = 4;
+    // // Crosshair parameters
+    // localparam CH_HEIGHT = 20;
+    // localparam CH_WIDTH  = 20;
+    // localparam CH_THICKNESS = 3;
+    // localparam CH_CENTER_DOT_THICKNESS = 4;
    
-    localparam GAP_FROM_CENTER_DOT = 5;
+    // localparam GAP_FROM_CENTER_DOT = 5;
     
     // COLOR OUTPUT
-    localparam GREEN = 12'h070;
+    localparam GREEN = 12'h0F0;
     localparam RED   = 12'hF00;
     
     reg [27:0] cooldown_timer = 0;
@@ -219,12 +211,16 @@ module mouse_movement(
             cooldown_timer <= 0;
             shot_enabled <= 1;
             bullet_count <= 16;
+            cooldown_progress <= 8'd255;
             led <= 16'hFFFF;
         end
         else begin
             // Decrement cooldown timer if not zero
             if (cooldown_timer > 0)
                 cooldown_timer <= cooldown_timer - 1;
+
+            // compute cooldown progress
+            cooldown_progress <= (cooldown_timer == 0) ? 8'd255 : (cooldown_timer * 255 / COOLDOWN);
 
             if (cooldown_timer == 0)
                 shot_enabled <= 1;
@@ -239,40 +235,40 @@ module mouse_movement(
         end
     end
    
-   wire crosshair_pixel;
-   // Crosshair horizontal and vertical arms centered on screen
-   assign crosshair_pixel = (
-       // left horizontal crosshair
-       (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
-        x_coord >= CENTER_X - GAP_FROM_CENTER_DOT - CH_WIDTH && x_coord <= CENTER_X - GAP_FROM_CENTER_DOT) ||
+//    wire crosshair_pixel;
+//    // Crosshair horizontal and vertical arms centered on screen
+//    assign crosshair_pixel = (
+//        // left horizontal crosshair
+//        (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
+//         x_coord >= CENTER_X - GAP_FROM_CENTER_DOT - CH_WIDTH && x_coord <= CENTER_X - GAP_FROM_CENTER_DOT) ||
          
-       // right horizontal crosshair
-        (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
-         x_coord >= CENTER_X + GAP_FROM_CENTER_DOT && x_coord <= CENTER_X + GAP_FROM_CENTER_DOT + CH_WIDTH) ||
+//        // right horizontal crosshair
+//         (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
+//          x_coord >= CENTER_X + GAP_FROM_CENTER_DOT && x_coord <= CENTER_X + GAP_FROM_CENTER_DOT + CH_WIDTH) ||
    
-       // top vertical crosshair
-       (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
-        y_coord >= CENTER_Y - GAP_FROM_CENTER_DOT - CH_HEIGHT && y_coord <= CENTER_Y - GAP_FROM_CENTER_DOT) ||
+//        // top vertical crosshair
+//        (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
+//         y_coord >= CENTER_Y - GAP_FROM_CENTER_DOT - CH_HEIGHT && y_coord <= CENTER_Y - GAP_FROM_CENTER_DOT) ||
          
-       // bottom vertical crosshair
-        (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
-         y_coord >= CENTER_Y + GAP_FROM_CENTER_DOT && y_coord <= CENTER_Y + GAP_FROM_CENTER_DOT + CH_HEIGHT) ||
+//        // bottom vertical crosshair
+//         (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
+//          y_coord >= CENTER_Y + GAP_FROM_CENTER_DOT && y_coord <= CENTER_Y + GAP_FROM_CENTER_DOT + CH_HEIGHT) ||
    
-       // Center dot
-       (x_coord >= CENTER_X - CH_CENTER_DOT_THICKNESS/2 && x_coord <= CENTER_X + CH_CENTER_DOT_THICKNESS/2 &&
-        y_coord >= CENTER_Y - CH_CENTER_DOT_THICKNESS/2 && y_coord <= CENTER_Y + CH_CENTER_DOT_THICKNESS/2)
-   );
+//        // Center dot
+//        (x_coord >= CENTER_X - CH_CENTER_DOT_THICKNESS/2 && x_coord <= CENTER_X + CH_CENTER_DOT_THICKNESS/2 &&
+//         y_coord >= CENTER_Y - CH_CENTER_DOT_THICKNESS/2 && y_coord <= CENTER_Y + CH_CENTER_DOT_THICKNESS/2)
+//    );
    
    
-    always @(*) begin
-        if (crosshair_pixel) begin
-            if (shot_enabled)
-                vga_RGB = GREEN;
-            else
-                vga_RGB = RED;
-        end else begin
-            vga_RGB = 12'h000; // background
-        end
-    end
+    // always @(*) begin
+    //     if (crosshair_pixel) begin
+    //         if (shot_enabled)
+    //             vga_RGB = GREEN;
+    //         else
+    //             vga_RGB = RED;
+    //     end else begin
+    //         vga_RGB = 12'h000; // background
+    //     end
+    // end
     
 endmodule
