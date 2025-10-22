@@ -1,10 +1,10 @@
 -- Copyright 1986-2018 Xilinx, Inc. All Rights Reserved.
 -- --------------------------------------------------------------------------------
--- Tool Version: Vivado v.2018.2 (lin64) Build 2258646 Thu Jun 14 20:02:38 MDT 2018
--- Date        : Tue Oct 14 20:18:29 2025
--- Host        : kc-ThinkPad-T14-Gen-5 running 64-bit Ubuntu 22.04.5 LTS
+-- Tool Version: Vivado v.2018.2 (win64) Build 2258646 Thu Jun 14 20:03:12 MDT 2018
+-- Date        : Wed Oct 22 02:29:06 2025
+-- Host        : DESKTOP-2GF0LO4 running 64-bit major release  (build 9200)
 -- Command     : write_vhdl -force -mode synth_stub
---               /media/kc/Data/EE2026/project/FDP/FDP.runs/display_clocks_synth_1/display_clocks_stub.vhdl
+--               C:/Users/joelk/Documents/ee_files/EE2026/project/FDP/FDP.runs/display_clocks_synth_1/display_clocks_stub.vhdl
 -- Design      : display_clocks
 -- Purpose     : Stub declaration of top-level module interface
 -- Device      : xc7a35tcpg236-1
@@ -16,6 +16,7 @@ entity display_clocks is
   Port ( 
     clk_out1 : out STD_LOGIC;
     clk_out2 : out STD_LOGIC;
+    clk_out3 : out STD_LOGIC;
     reset : in STD_LOGIC;
     locked : out STD_LOGIC;
     clk_in1 : in STD_LOGIC
@@ -27,6 +28,6 @@ architecture stub of display_clocks is
 attribute syn_black_box : boolean;
 attribute black_box_pad_pin : string;
 attribute syn_black_box of stub : architecture is true;
-attribute black_box_pad_pin of stub : architecture is "clk_out1,clk_out2,reset,locked,clk_in1";
+attribute black_box_pad_pin of stub : architecture is "clk_out1,clk_out2,clk_out3,reset,locked,clk_in1";
 begin
 end;

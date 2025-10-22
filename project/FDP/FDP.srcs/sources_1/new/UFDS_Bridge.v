@@ -4,21 +4,35 @@ module UFDS_Bridge (
     input  wire pclk,
     input  wire p_rst,
     input  wire p_valid,
-    input  wire p_fs,
-    input  wire p_ls,
-    input  wire p_fe,
+    input  wire [8:0] p_x,  // 0..305 (306 pixels wide)
+    input  wire [7:0] p_y,  // 0..239 (240 pixels tall)
     input  wire p_px,
     // UFDS @ 100 MHz
     input  wire clk,
     input  wire ext_reset,
 
     // UFDS single-bbox outputs
-    output wire [8:0] bbox_left, bbox_right, centroid_x,
-    output wire [7:0] bbox_top,  bbox_bottom, centroid_y,
+    // output wire [9:0] bbox_left, bbox_right, centroid_x,
+    // output wire [8:0] bbox_top,  bbox_bottom, centroid_y,
+
+    // UFDS top-4 concatenated outputs passthrough
+    output wire [39:0] comp3210_left,
+    output wire [39:0] comp3210_right,
+    output wire [35:0] comp3210_top,
+    output wire [35:0] comp3210_bottom,
+    output wire [39:0] comp3210_cx,
+    output wire [35:0] comp3210_cy,
+    output wire [63:0] comp3210_area,
+    output wire [2:0]  comp_count,
 
     // Bridge ready (mirrors UFDS ready)
     output wire ready_o
 );
+
+    wire p_fs = (p_x==9'd0 && p_y==8'd0) ? 1'b1 : 1'b0; // frame start when x=0,y=0
+    wire p_ls = (p_x==9'd0) ? 1'b1 : 1'b0;              // line start when x=0
+    wire p_fe = (p_x == 9'd305 && p_y == 8'd239) ? 1'b1 : 1'b0; // frame end at last pixel (306x240)
+
     // FIFO signals
     wire        wr_full;
     wire        rd_empty;
@@ -59,12 +73,21 @@ module UFDS_Bridge (
 
         .ready_to_read(ready_i),
 
-        .bbox_left(bbox_left),
-        .bbox_right(bbox_right),
-        .bbox_top(bbox_top),
-        .bbox_bottom(bbox_bottom),
-        .centroid_x(centroid_x),
-        .centroid_y(centroid_y)
+        // .bbox_left(bbox_left),
+        // .bbox_right(bbox_right),
+        // .bbox_top(bbox_top),
+        // .bbox_bottom(bbox_bottom),
+        // .centroid_x(centroid_x),
+        // .centroid_y(centroid_y),
+
+        .comp3210_left(comp3210_left),
+        .comp3210_right(comp3210_right),
+        .comp3210_top(comp3210_top),
+        .comp3210_bottom(comp3210_bottom),
+        .comp3210_cx(comp3210_cx),
+        .comp3210_cy(comp3210_cy),
+        .comp3210_area(comp3210_area),
+        .comp_count(comp_count)
     );
 
     // Simple 1-word read buffer to align to UFDS ready

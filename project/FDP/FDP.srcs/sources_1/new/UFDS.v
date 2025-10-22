@@ -41,21 +41,32 @@ module UFDS_Detector(
     input  wire frame_end,     // pulse after last active pixel
     input  wire curr_pix,      // every pixel that is coming in
 
-    output reg [8:0] bbox_left,
-    output reg [8:0] bbox_right,
-    output reg [7:0] bbox_top,
-    output reg [7:0] bbox_bottom,
-    output reg [8:0] centroid_x,
-    output reg [7:0] centroid_y,
+    // output reg [9:0] bbox_left, 
+    // output reg [9:0] bbox_right,
+    // output reg [8:0] bbox_top, 
+    // output reg [8:0] bbox_bottom,
+    // output reg [9:0] centroid_x,
+    // output reg [8:0] centroid_y,
+
+    // 4 component output (it will be the 4 largest components detected), lower bits is for component 0 - largest
+    output reg  [2:0] comp_count, // numer of valid components
+    output reg  [39:0] comp3210_left ,
+    output reg  [39:0] comp3210_right ,
+    output reg  [35:0] comp3210_top,
+    output reg  [35:0] comp3210_bottom,
+    output reg  [39:0] comp3210_cx,
+    output reg  [35:0] comp3210_cy,
+    output reg  [63:0] comp3210_area,
     output wire ready_to_read
 
     );
 
-localparam integer WIDTH = 320;
+localparam integer WIDTH = 306;
 localparam integer HEIGHT = 240;
 localparam integer x_bitsize = 9;
 localparam integer y_bitsize = 8;
-localparam integer label_bits = 12; // rmb label == 0 is the background and supports up to 4095 labels (can reduce if dont need this many labels)
+localparam integer label_bits = 9; // rmb label == 0 is the background and supports up to 4095 labels (can reduce if dont need this many labels)
+localparam integer MIN_AREA = 4; // filter out tiny components for multi-output
 
 // current pixel coordinates (increment x each pixel, on line_start x=0 and y increment by 1)
 reg [x_bitsize-1:0] x;
@@ -68,31 +79,31 @@ reg [y_bitsize-1:0] y;
  * just swap the roles of these two after every row (using toggle_line 0: prev=buff0, curr=buff1; 1: prev=buff1, curr=buff0)
  * each entry stores the component ID
 */
-reg [label_bits-1:0] row0_labels[0:WIDTH-1];
-reg [label_bits-1:0] row1_labels[0:WIDTH-1];
+(* ram_style = "distributed" *) reg [label_bits-1:0] row0_labels[0:WIDTH-1];
+(* ram_style = "distributed" *) reg [label_bits-1:0] row1_labels[0:WIDTH-1];
 reg toggle_line; // 0: prev=buff0, curr=buff1; 1: prev=buff1, curr=buff0
 
 /*
  * Quick-Union Disjoint Set ADT implementation (specifically weighted union) 
  * and the stats to store for each label
  */
-localparam integer MAX_LABELS = 4096; // can reduce if dont need this many labels
+localparam integer MAX_LABELS = 512; // can reduce if dont need this many labels
 localparam integer FIND_MAX_ITERATIONS = 8; // to prevent infinite loop in find, since loops in functions are combinational. Height of tree is O(log n) = 4
 
-reg [label_bits-1:0] parent [0:MAX_LABELS-1]; // C++ eq: vector<int> parent (MAX_LABELS);
-reg [3:0] rank [0:MAX_LABELS-1]; // C++ eq: vector<int> rank (MAX_LABELS); 
-reg active_root [0:MAX_LABELS-1]; // boolean array marking whether a component ID is in use as a root
-reg [label_bits-1:0] next_label; // next unused label n0.
+(* ram_style = "distributed" *) reg [label_bits-1:0] parent [0:MAX_LABELS-1]; // C++ eq: vector<int> parent (MAX_LABELS);
+(* ram_style = "distributed" *) reg [3:0] rank [0:MAX_LABELS-1]; // C++ eq: vector<int> rank (MAX_LABELS); 
+(* ram_style = "distributed" *) reg active_root [0:MAX_LABELS-1]; // boolean array marking whether a component ID is in use as a root
+(* ram_style = "distributed" *) reg [label_bits-1:0] next_label; // next unused label n0.
 
 // stats for each component (hence only store for root pixel, where parent[label] == label)
 // centroid_x = sum_x / area ; centroid_y = sum_y / area
-reg [23:0] area [0:MAX_LABELS-1]; // number of pixels in this component
-reg [31:0] sum_x [0:MAX_LABELS-1]; // sum of x coordinates of pixels in this component
-reg [31:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
-reg [x_bitsize-1:0] min_x [0:MAX_LABELS-1]; 
-reg [x_bitsize-1:0] max_x [0:MAX_LABELS-1]; 
-reg [y_bitsize-1:0] min_y [0:MAX_LABELS-1]; 
-reg [y_bitsize-1:0] max_y [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [16:0] area [0:MAX_LABELS-1]; // number of pixels in this component
+(* ram_style = "distributed" *) reg [15:0] sum_x [0:MAX_LABELS-1]; // sum of x coordinates of pixels in this component
+(* ram_style = "distributed" *) reg [15:0] sum_y [0:MAX_LABELS-1]; // sum of y coordinates of pixels in this component
+(* ram_style = "distributed" *) reg [x_bitsize-1:0] min_x [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [x_bitsize-1:0] max_x [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [y_bitsize-1:0] min_y [0:MAX_LABELS-1]; 
+(* ram_style = "distributed" *) reg [y_bitsize-1:0] max_y [0:MAX_LABELS-1]; 
 
 
 // retrieve the reduced neighbour pixel's labels 
@@ -135,11 +146,17 @@ reg [label_bits-1:0] tmp;
 reg curr_pix_q;
 
 // output stuff
-reg [23:0] ua_area_new;         // next area when adding a pixel
-reg [23:0] best_area;           // running largest area
-reg [label_bits-1:0] best_lbl;  // label of current best
+reg [16:0] ua_area_new; // next area when adding a pixel, caching the area for the label that is growing    
+// reg [16:0] best_area; // running largest area
+// reg [label_bits-1:0] best_lbl; // label of current best
 
+// leaderboard for top-4 components
+reg [label_bits-1:0] slot0, slot1, slot2, slot3; // to hold the best 4 labels
+reg [16:0] slot0_area, slot1_area, slot2_area, slot3_area; // since we are comparing based on area
+reg [16:0] min_area_tmp; // temp
+reg [1:0] min_idx_tmp; // temp
 
+// reg frame_end_accepted_pixel; 
 
 // FSM encoding
 reg [4:0] state;
@@ -148,14 +165,14 @@ localparam S_INIT_LINES = 1;
 localparam S_INIT_UFDS = 2;
 localparam S_READY = 3;
 localparam S_SAMPLE = 4;
-localparam S_FIND_L = 5;
-localparam S_FIND_L_RD = 6;
-localparam S_FIND_U = 7;
-localparam S_FIND_U_RD = 8;
-localparam S_FIND_UL = 9;
-localparam S_FIND_UL_RD = 10;
-localparam S_FIND_UR = 11;
-localparam S_FIND_UR_RD = 12;
+// localparam S_FIND_L = 5;
+// localparam S_FIND_L_RD = 6;
+// localparam S_FIND_U = 7;
+// localparam S_FIND_U_RD = 8;
+// localparam S_FIND_UL = 9;
+// localparam S_FIND_UL_RD = 10;
+// localparam S_FIND_UR = 11;
+// localparam S_FIND_UR_RD = 12;
 localparam S_CHOOSE = 13;
 localparam S_ALLOC = 14;
 localparam S_UNION_DECIDE = 15;
@@ -170,6 +187,11 @@ localparam S_UNION_MERGE_2 = 23;
 localparam S_UNION_MERGE_3 = 24;
 localparam S_LABEL_WRITE = 25;
 localparam S_ADVANCE = 26;
+localparam S_COMP0 = 27;
+localparam S_COMP1 = 28;
+localparam S_COMP2 = 29;
+localparam S_COMP3 = 30;
+localparam S_COMPS_DONE = 31;
 
 assign ready_to_read = (state == S_READY);
 
@@ -179,7 +201,7 @@ assign ready_to_read = (state == S_READY);
 always @(posedge clk) begin
     if (ext_reset) begin
         x <= 0; y <= 0; toggle_line <= 0;
-        bbox_left <= 0; bbox_right <= 0; bbox_top <= 0; bbox_bottom <= 0; centroid_x <= 0; centroid_y <= 0;
+        // bbox_left <= 0; bbox_right <= 0; bbox_top <= 0; bbox_bottom <= 0; centroid_x <= 0; centroid_y <= 0;
         
         init_width_idx <= 0;
         init_label_idx <= 0;
@@ -189,7 +211,20 @@ always @(posedge clk) begin
         ua<=0; ub<=0; 
         // ra<=0; rb<=0;
 
-        best_area <= 0; best_lbl <= 0;
+        // best_area <= 0; best_lbl <= 0;
+
+        // multi-output resets
+        slot0 <= 0; slot1 <= 0; slot2 <= 0; slot3 <= 0;
+        slot0_area <= 0; slot1_area <= 0; slot2_area <= 0; slot3_area <= 0;
+        comp_count <= 0;
+        comp3210_left  <= 0;
+        comp3210_right  <= 0;
+        comp3210_top <= 0;
+        comp3210_bottom <= 0;
+        comp3210_cx <= 0;
+        comp3210_cy <= 0;
+        comp3210_area <= 0;
+        // frame_end_accepted_pixel <= 1'b0;
 
         state <= S_INIT_LINES; // and later S_INIT_UFDS
 
@@ -205,10 +240,16 @@ always @(posedge clk) begin
             // init_label_idx <= 0;
             next_label <= 1;
 
-            bbox_left <= 0; bbox_right <= 0; bbox_top <= 0; bbox_bottom <= 0; centroid_x <= 0; centroid_y <= 0;
-            best_area <= 0; best_lbl <= 0;
+            // bbox_left <= 0; bbox_right <= 0; bbox_top <= 0; bbox_bottom <= 0; centroid_x <= 0; centroid_y <= 0;
+            // best_area <= 0; best_lbl <= 0;
+
+            // clear leaderboard for new frame
+            slot0 <= 0; slot1 <= 0; slot2 <= 0; slot3 <= 0;
+            slot0_area <= 0; slot1_area <= 0; slot2_area <= 0; slot3_area <= 0;
+            comp_count <= 0;
 
             state <= S_READY;
+
         end else if (line_start && state==S_READY) begin
             x <= 0;
             y <= y + 1;
@@ -256,6 +297,8 @@ always @(posedge clk) begin
                 if (in_valid) begin
                     // sample provisional neighbor labels
                     curr_pix_q <= curr_pix;
+                    // latch frame_end associated with this accepted pixel
+                    // frame_end_accepted_pixel <= frame_end;
                     left <= left_label;
                     up <= up_label;
                     upleft <= upleft_label;
@@ -540,10 +583,46 @@ always @(posedge clk) begin
             // UNION: merge stats ub -> ua (spread across clock cycles as now so that 
             // can finish within 1 clock cycle. May be a problem need to test)
             S_UNION_MERGE_0: begin
-                area[ua] <= area[ua] + area[ub];
+                // pre-compute new area for leaderboard
+                ua_area_new = area[ua] + area[ub];
+                area[ua] <= ua_area_new;
                 sum_x[ua] <= sum_x[ua] + sum_x[ub];
                 sum_y[ua] <= sum_y[ua] + sum_y[ub];
-                active_root[ub] <= 0; // ub is no longer a root after union-ed
+                active_root[ub] <= 0; // ub is no longer a root (independent component) after union-ed
+
+                // remove ub from leaderboard
+                if (slot0 == ub) begin slot0 <= 0; slot0_area <= 0; end
+                if (slot1 == ub) begin slot1 <= 0; slot1_area <= 0; end
+                if (slot2 == ub) begin slot2 <= 0; slot2_area <= 0; end
+                if (slot3 == ub) begin slot3 <= 0; slot3_area <= 0; end
+
+                // refresh/insert ua with new area (area increased by area[ub], need to update leaderboard)
+                // if (ua_area_new >= MIN_AREA) begin
+                //     if (slot0 == ua) slot0_area <= ua_area_new;
+                //     else if (slot1 == ua) slot1_area <= ua_area_new;
+                //     else if (slot2 == ua) slot2_area <= ua_area_new;
+                //     else if (slot3 == ua) slot3_area <= ua_area_new;
+                //     else if (slot0 == 0) begin slot0 <= ua; slot0_area <= ua_area_new; end
+                //     else if (slot1 == 0) begin slot1 <= ua; slot1_area <= ua_area_new; end
+                //     else if (slot2 == 0) begin slot2 <= ua; slot2_area <= ua_area_new; end
+                //     else if (slot3 == 0) begin slot3 <= ua; slot3_area <= ua_area_new; end
+                //     else begin
+                //         // replace current min if ua is bigger
+                //         min_area_tmp = slot0_area; 
+                //         min_idx_tmp = 0;
+                //         if (slot1_area < min_area_tmp) begin min_area_tmp = slot1_area; min_idx_tmp = 1; end
+                //         if (slot2_area < min_area_tmp) begin min_area_tmp = slot2_area; min_idx_tmp = 2; end
+                //         if (slot3_area < min_area_tmp) begin min_area_tmp = slot3_area; min_idx_tmp = 3; end
+                //         if (ua_area_new > min_area_tmp) begin
+                //             case (min_idx_tmp)
+                //                 0: begin slot0 <= ua; slot0_area <= ua_area_new; end
+                //                 1: begin slot1 <= ua; slot1_area <= ua_area_new; end
+                //                 2: begin slot2 <= ua; slot2_area <= ua_area_new; end
+                //                 default: begin slot3 <= ua; slot3_area <= ua_area_new; end
+                //             endcase
+                //         end
+                //     end
+                // end
                 state <= S_UNION_MERGE_1;
             end
             S_UNION_MERGE_1: begin
@@ -576,9 +655,9 @@ always @(posedge clk) begin
 
                 // Update "best" after merge is fully reflected
                 // If previous best was ub, point to ua now
-                if (best_lbl == ub) begin
-                    best_lbl <= ua;
-                end
+                // if (best_lbl == ub) begin
+                //     best_lbl <= ua;
+                // end
 
                 state <= S_LABEL_WRITE;
             end
@@ -594,7 +673,8 @@ always @(posedge clk) begin
                 endcase
 
                 // Add pixel to stats of ua
-                area[ua] <= area[ua] + 1;
+                ua_area_new = area[ua] + 1;
+                area[ua] <= ua_area_new;
                 sum_x[ua] <= sum_x[ua] + x;
                 sum_y[ua] <= sum_y[ua] + y;
                 if (x < min_x[ua]) begin
@@ -610,15 +690,42 @@ always @(posedge clk) begin
                     max_y[ua] <= y;
                 end
 
-                if (area[ua] + 1 > best_area) begin
-                    best_area <= area[ua] + 1;
-                    best_lbl <= ua;
-                    bbox_left <= (x < min_x[ua]) ? x : min_x[ua];
-                    bbox_right <= (x > max_x[ua]) ? x : max_x[ua];
-                    bbox_top <= (y < min_y[ua]) ? y : min_y[ua];
-                    bbox_bottom <= (y > max_y[ua]) ? y : max_y[ua];
-                    centroid_x <= (sum_x[ua] + x) / (area[ua] + 1);
-                    centroid_y <= (sum_y[ua] + y) / (area[ua] + 1);
+                // if (ua_area_new > best_area) begin
+                //     best_area <= ua_area_new;
+                //     best_lbl <= ua;
+                //     bbox_left = (x < min_x[ua]) ? x : min_x[ua];
+                //     bbox_right = (x > max_x[ua]) ? x : max_x[ua];
+                //     bbox_top = (y < min_y[ua]) ? y : min_y[ua];
+                //     bbox_bottom = (y > max_y[ua]) ? y : max_y[ua];
+                //     centroid_x <= (bbox_left + bbox_right) >> 1;
+                //     centroid_y <= (bbox_top + bbox_bottom) >> 1;
+                // end
+
+                // leaderboard update for ua (post +1 pixel)
+                if (ua_area_new >= MIN_AREA) begin
+                    if (slot0 == ua) slot0_area <= ua_area_new;
+                    else if (slot1 == ua) slot1_area <= ua_area_new;
+                    else if (slot2 == ua) slot2_area <= ua_area_new;
+                    else if (slot3 == ua) slot3_area <= ua_area_new;
+                    else if (slot0 == 0) begin slot0 <= ua; slot0_area <= ua_area_new; end
+                    else if (slot1 == 0) begin slot1 <= ua; slot1_area <= ua_area_new; end
+                    else if (slot2 == 0) begin slot2 <= ua; slot2_area <= ua_area_new; end
+                    else if (slot3 == 0) begin slot3 <= ua; slot3_area <= ua_area_new; end
+                    else begin
+                        min_area_tmp = slot0_area; 
+                        min_idx_tmp = 0;
+                        if (slot1_area < min_area_tmp) begin min_area_tmp = slot1_area; min_idx_tmp = 1; end
+                        if (slot2_area < min_area_tmp) begin min_area_tmp = slot2_area; min_idx_tmp = 2; end
+                        if (slot3_area < min_area_tmp) begin min_area_tmp = slot3_area; min_idx_tmp = 3; end
+                        if (ua_area_new > min_area_tmp) begin
+                            case (min_idx_tmp)
+                                0: begin slot0 <= ua; slot0_area <= ua_area_new; end
+                                1: begin slot1 <= ua; slot1_area <= ua_area_new; end
+                                2: begin slot2 <= ua; slot2_area <= ua_area_new; end
+                                default: begin slot3 <= ua; slot3_area <= ua_area_new; end
+                            endcase
+                        end
+                    end
                 end
 
                 state <= S_ADVANCE;
@@ -627,6 +734,72 @@ always @(posedge clk) begin
             // Advance x; y/toggle handled by external line_start (already toggled in READY)
             S_ADVANCE: begin
                 x <= x + 1;
+                // if (frame_end_accepted_pixel) begin
+                //     frame_end_accepted_pixel <= 1'b0;
+                    state <= S_COMP0;
+                // end else begin
+                //     state <= S_READY;
+                // end
+            end
+
+            // snapshot one component per cycle to ease timing
+            S_COMP0: begin
+                // (LSB chunk)
+                if (slot0!=0 && active_root[slot0] && area[slot0] >= MIN_AREA) begin
+                    comp3210_left[9:0] = min_x[slot0];
+                    comp3210_right[9:0] = max_x[slot0];
+                    comp3210_top[8:0] = min_y[slot0];
+                    comp3210_bottom[8:0] = max_y[slot0];
+                    comp3210_cx[9:0] <= (min_x[slot0] + max_x[slot0]) >> 1;
+                    comp3210_cy[8:0] <= (min_y[slot0] + max_y[slot0]) >> 1;
+                    comp3210_area[15:0] <= area[slot0][15:0];
+                end
+                state <= S_COMP1;
+            end
+            S_COMP1: begin
+                if (slot1!=0 && active_root[slot1] && area[slot1] >= MIN_AREA) begin
+                    comp3210_left[19:10] = min_x[slot1];
+                    comp3210_right[19:10] = max_x[slot1];
+                    comp3210_top[17:9] = min_y[slot1];
+                    comp3210_bottom[17:9] = max_y[slot1];
+                    comp3210_cx[19:10] <= (min_x[slot1] + max_x[slot1]) >> 1;
+                    comp3210_cy[17:9] <= (min_y[slot1] + max_y[slot1]) >> 1;
+                    comp3210_area[31:16] <= area[slot1][15:0];
+                end
+                state <= S_COMP2;
+            end
+            S_COMP2: begin
+                if (slot2!=0 && active_root[slot2] && area[slot2] >= MIN_AREA) begin
+                    comp3210_left[29:20] = min_x[slot2];
+                    comp3210_right[29:20] = max_x[slot2];
+                    comp3210_top[26:18] = min_y[slot2];
+                    comp3210_bottom[26:18] = max_y[slot2];
+                    comp3210_cx[29:20] <= (min_x[slot2] + max_x[slot2]) >> 1;
+                    comp3210_cy[26:18] <= (min_y[slot2] + max_y[slot2]) >> 1;
+                    comp3210_area[47:32] <= area[slot2][15:0];
+                end
+                state <= S_COMP3;
+            end
+            S_COMP3: begin
+                // (MSB chunk)
+                if (slot3!=0 && active_root[slot3] && area[slot3] >= MIN_AREA) begin
+                    comp3210_left [39:30] = min_x[slot3];
+                    comp3210_right [39:30] = max_x[slot3];
+                    comp3210_top[35:27] = min_y[slot3];
+                    comp3210_bottom[35:27] = max_y[slot3];
+                    comp3210_cx[39:30] <= (min_x[slot3] + max_x[slot3]) >> 1;
+                    comp3210_cy[35:27] <= (min_y[slot3] + max_y[slot3]) >> 1;
+                    comp3210_area[63:48] <= area[slot3][15:0];
+                end
+                state <= S_COMPS_DONE;
+            end
+            S_COMPS_DONE: begin
+                // compute comp_count
+                comp_count <=
+                    ((slot0!=0) && active_root[slot0] && (area[slot0] >= MIN_AREA)) +
+                    ((slot1!=0) && active_root[slot1] && (area[slot1] >= MIN_AREA)) +
+                    ((slot2!=0) && active_root[slot2] && (area[slot2] >= MIN_AREA)) +
+                    ((slot3!=0) && active_root[slot3] && (area[slot3] >= MIN_AREA));
                 state <= S_READY;
             end
 

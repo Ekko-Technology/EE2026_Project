@@ -35,7 +35,7 @@ module OV7670_Registers(
             8'h07: sreg <= 16'h0400; // COM1   no CCIR601
             8'h08: sreg <= 16'h40F0; // COM15  Full 0-255 output, RGB 555
             8'h09: sreg <= 16'h3A04; // TSLB   UV ordering
-            8'h0A: sreg <= 16'h1438; // COM9   AGC ceiling
+            8'h0A: sreg <= 16'h146A; // COM9   AGC ceiling
             8'h0B: sreg <= 16'h4F40; // MTX1   colour conversion matrix
             8'h0C: sreg <= 16'h5034; // MTX2
             8'h0D: sreg <= 16'h510C; // MTX3
@@ -84,13 +84,18 @@ module OV7670_Registers(
             8'h38: sreg <= 16'h410A;    //auto WB enable and double colour matrix coefficients
             8'h39: sreg <= 16'h3B12;    //default 00, this sets banding filter on, and chooses 60hz banding filter
             8'h3A: sreg <= 16'h13EC;    //default 8F, activates AGC,AWB,AEC, added banding filter and unlimited step size for AEC
-            8'h3B: sreg <= 16'h01E0;    //default 80, blue WB gain
-            8'h3C: sreg <= 16'h0280;    //default 80, red WB gain
-            8'h3D: sreg <= 16'h6A80;    //default 00, green WB gain?
-            8'h3E: sreg <= 16'h6900;    //default 00, fix gain control
-            8'h3F: sreg <= 16'h10F0;    //default 40, middle 7 bits of AEC
-            8'h40: sreg <= 16'h0700;    //default 00, upper 5 bits of AEC
-            8'h41: sreg <= 16'h3F00;    //default 00, edge enhancement??
+            8'h3B: sreg <= 16'h24FF;    //default 75, sets the maximum value for AGC/AEC
+            8'h3C: sreg <= 16'h2500;    //default 63, sets the minimum value for AGC/AEC
+            8'h3D: sreg <= 16'h26F0;    //default D4, sets the upper nibble of the upper and lower limits of fast mode AGC/AEC
+            8'h3E: sreg <= 16'h01E0;    //default 80, blue WB gain
+            8'h3F: sreg <= 16'h0280;    //default 80, red WB gain
+            8'h40: sreg <= 16'h6A80;    //default 00, green WB gain?
+            8'h41: sreg <= 16'h6900;    //default 00, fix gain control
+            8'h42: sreg <= 16'h10FF;    //default 40, middle 7 bits of AEC
+            8'h43: sreg <= 16'h071F;    //default 00, upper 5 bits of AEC
+            8'h44: sreg <= 16'h3F00;    //default 00, edge enhancement??
+            8'h45: sreg <= 16'h550F;    //default 00, brightness
+            8'h46: sreg <= 16'h5640;    //default 40, contrast
 
             // Add missing scaling registers for QVGA (320x240) - From datasheet
             // 8'h40: sreg <= 16'h1214; // COM7   Size & RGB output

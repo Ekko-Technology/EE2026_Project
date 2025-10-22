@@ -36,6 +36,8 @@ module VGA_Controller(
     reg [9:0] hCounter = 10'd0;
     reg [9:0] vCounter = 10'd0;
     reg blank = 1'b1;
+    // Align incoming BRAM data (1-cycle latency) to current address timing
+    reg [11:0] frame_pixel_q;
 
     assign active_area = ~blank;
 
@@ -44,7 +46,9 @@ module VGA_Controller(
     localparam SRC_HEIGHT = 240;
     wire [8:0] src_y = vCounter[9:1]; // vCounter (0-479)  >> 1 (0..239)
     wire [8:0] src_x = hCounter[9:1]; // hCounter (0..639) >> 1 (0..319)
-    assign frame_addr = src_y * 306 + src_x-14;     // i only want 306 right-side pixels
+    // Clamp to avoid unsigned underflow when cropping left 14 pixels
+    wire [8:0] src_x_adj = (src_x >= 9'd14) ? (src_x - 9'd14) : 9'd0;
+    assign frame_addr = src_y * 306 + src_x_adj;     // crop to 306 right-side pixels
     assign frame_x = hCounter;
     assign frame_y = vCounter;
 
@@ -61,12 +65,17 @@ module VGA_Controller(
             hCounter <= hCounter + 10'd1;
         end
 
-        // Pixel outputs (when not blank) - READ FROM BRAM
+        // Register incoming pixel to align with current address timing
+        frame_pixel_q <= frame_pixel;
+
+        // Pixel outputs (when not blank) - READ FROM BRAM (aligned)
+        // Start outputting a couple cycles earlier so the first shown pixel maps
+        // to src_x_adj == 0 (i.e., the leftmost cropped column).
         if (hCounter >= 30) begin
             if (blank == 1'b0) begin
-                vga_red   <= frame_pixel[11:8];
-                vga_green <= frame_pixel[7:4];
-                vga_blue  <= frame_pixel[3:0];
+                vga_red   <= frame_pixel_q[11:8];
+                vga_green <= frame_pixel_q[7:4];
+                vga_blue  <= frame_pixel_q[3:0];
             end else begin
                 vga_red   <= 4'b0;
                 vga_green <= 4'b0;

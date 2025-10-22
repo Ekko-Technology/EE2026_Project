@@ -465,6 +465,7 @@ module Top(
     //                      (bitmap_pixel ? 12'hFFF : 12'h000);
 
     // Show middle pixel value on LEDs for debugging
+<<<<<<< HEAD
     // always @(posedge clk25) begin
     //     if (active_area && (frame_addr == 36567)) begin
     //         ss_output[11:0] <= image_pixel;
@@ -472,13 +473,31 @@ module Top(
     //         ss_output[11:0] <= ss_output[11:0];
     //     end
     // end
+=======
+    always @(posedge clk25) begin
+        if (active_area && (frame_addr == 36567)) begin
+            ss_output[11:0] <= image_pixel;
+        end else begin
+            ss_output[11:0] <= ss_output[11:0];
+        end
+    end
+>>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
 
 
     // ----------- UFDS BRIDGE FOR FIND CONTOURS ----------- //
 
+<<<<<<< HEAD
     wire [9:0] bbox_left, bbox_right, centroid_x;
     wire [8:0] bbox_top, bbox_bottom, centroid_y;
     wire ready_o;
+=======
+    // Concatenated top-4 component outputs from UFDS via Bridge
+    wire [39:0] comp3210_left, comp3210_right, comp3210_cx;   // 4x {valid(1) , x[8:0]}
+    wire [35:0] comp3210_top,  comp3210_bottom, comp3210_cy;  // 4x {valid(1) , y[7:0]}
+    wire [63:0] comp3210_area;                                 // 4x area[15:0]
+    wire [2:0]  comp_count;
+    wire        ready_o;
+>>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
     // Only feed UFDS within the 306x240 cropped active area (x in [14,319], y in [0,239])
     wire in_roi = active_area && (frame_x[9:1] >= 10'd14) && (frame_x[9:1] < 10'd320) && (frame_y[9:1] < 10'd240);
     // Decimate the VGA-doubled raster (640x480) to source grid (320x240):
@@ -494,12 +513,23 @@ module Top(
         .p_px(bitmap_pixel), // use same bitmap data as pixel input
         .clk(clk50),
         .ext_reset(cap_reset),
+<<<<<<< HEAD
         .bbox_left(bbox_left),
         .bbox_right(bbox_right),
         .bbox_top(bbox_top),
         .bbox_bottom(bbox_bottom),
         .centroid_x(centroid_x),
         .centroid_y(centroid_y),
+=======
+        .comp3210_left(comp3210_left),
+        .comp3210_right(comp3210_right),
+        .comp3210_top(comp3210_top),
+        .comp3210_bottom(comp3210_bottom),
+        .comp3210_cx(comp3210_cx),
+        .comp3210_cy(comp3210_cy),
+        .comp3210_area(comp3210_area),
+        .comp_count(comp_count),
+>>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
         .ready_o(ready_o)
     );
 
@@ -537,6 +567,7 @@ module Top(
 
 
     // ----------- DISPLAY OUTPUTS ----------- //
+<<<<<<< HEAD
     // reg [15:0] ss_output = 16'h0000;
     // Seven_Seg ssd (
     //     .clk(clk),
@@ -640,6 +671,114 @@ module Top(
                     frame_y[9:1] == centroid_y_latch && frame_x[9:1]-14 >= centroid_x_latch-2 && frame_x[9:1]-14 <= centroid_x_latch+2    //centroid horizontal line
                 )
             ) begin
+=======
+    reg [15:0] ss_output = 16'h0000;
+    Seven_Seg ssd (
+        .clk(clk),
+        .num(ss_output),
+        .dd(4'b0000),
+        .seg(seg),
+        .an(an)
+    );
+
+    // Decode concatenated outputs into per-component fields and latch once per VGA frame
+    wire [9:0] left0   = comp3210_left[9:0];
+    wire [9:0] left1   = comp3210_left[19:10];
+    wire [9:0] left2   = comp3210_left[29:20];
+    wire [9:0] left3   = comp3210_left[39:30];
+
+    wire [9:0] right0  = comp3210_right[9:0];
+    wire [9:0] right1  = comp3210_right[19:10];
+    wire [9:0] right2  = comp3210_right[29:20];
+    wire [9:0] right3  = comp3210_right[39:30];
+
+    wire [8:0] top0    = comp3210_top[8:0];
+    wire [8:0] top1    = comp3210_top[17:9];
+    wire [8:0] top2    = comp3210_top[26:18];
+    wire [8:0] top3    = comp3210_top[35:27];
+
+    wire [8:0] bottom0 = comp3210_bottom[8:0];
+    wire [8:0] bottom1 = comp3210_bottom[17:9];
+    wire [8:0] bottom2 = comp3210_bottom[26:18];
+    wire [8:0] bottom3 = comp3210_bottom[35:27];
+
+    wire [9:0] cx0     = comp3210_cx[9:0];
+    wire [9:0] cx1     = comp3210_cx[19:10];
+    wire [9:0] cx2     = comp3210_cx[29:20];
+    wire [9:0] cx3     = comp3210_cx[39:30];
+
+    wire [8:0] cy0     = comp3210_cy[8:0];
+    wire [8:0] cy1     = comp3210_cy[17:9];
+    wire [8:0] cy2     = comp3210_cy[26:18];
+    wire [8:0] cy3     = comp3210_cy[35:27];
+
+    // Latches for overlay drawing
+    reg [9:0] left0_l, right0_l, cx0_l;
+    reg [9:0] left1_l, right1_l, cx1_l;
+    reg [9:0] left2_l, right2_l, cx2_l;
+    reg [9:0] left3_l, right3_l, cx3_l;
+    reg [8:0] top0_l, bottom0_l, cy0_l;
+    reg [8:0] top1_l, bottom1_l, cy1_l;
+    reg [8:0] top2_l, bottom2_l, cy2_l;
+    reg [8:0] top3_l, bottom3_l, cy3_l;
+    wire [15:0] crosshair_radius_squared = (frame_x[9:1]-14-153)*(frame_x[9:1]-14-153) + (frame_y[9:1]-120)*(frame_y[9:1]-120);
+    integer crosshair_radius = 7;
+    always @(posedge clk25) begin
+        if (frame_addr == 73439) begin
+            // snapshot UFDS results once per VGA frame
+            left0_l <= left0; right0_l <= right0; cx0_l <= cx0; top0_l <= top0; bottom0_l <= bottom0; cy0_l <= cy0;
+            left1_l <= left1; right1_l <= right1; cx1_l <= cx1; top1_l <= top1; bottom1_l <= bottom1; cy1_l <= cy1;
+            left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
+            left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
+        end else begin
+            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
+            if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
+                frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
+                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
+                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
+            ) begin
+                //draw red circle and crosshair at centre of screen
+                frame_pixel <= 12'h0F0;
+            end
+            else if (in_roi && (
+                // Comp 0
+                (
+                    (frame_x[9:1]-14 == left0_l  && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
+                    (frame_x[9:1]-14 == right0_l && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
+                    (frame_y[9:1] == top0_l      && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
+                    (frame_y[9:1] == bottom0_l   && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
+                    (frame_x[9:1]-14 == cx0_l    && frame_y[9:1] >= cy0_l-2 && frame_y[9:1] <= cy0_l+2) ||
+                    (frame_y[9:1] == cy0_l       && frame_x[9:1]-14 >= cx0_l-2 && frame_x[9:1]-14 <= cx0_l+2)
+                ) ||
+                // Comp 1
+                (
+                    (frame_x[9:1]-14 == left1_l  && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
+                    (frame_x[9:1]-14 == right1_l && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
+                    (frame_y[9:1] == top1_l      && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
+                    (frame_y[9:1] == bottom1_l   && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
+                    (frame_x[9:1]-14 == cx1_l    && frame_y[9:1] >= cy1_l-2 && frame_y[9:1] <= cy1_l+2) ||
+                    (frame_y[9:1] == cy1_l       && frame_x[9:1]-14 >= cx1_l-2 && frame_x[9:1]-14 <= cx1_l+2)
+                ) ||
+                // Comp 2
+                (
+                    (frame_x[9:1]-14 == left2_l  && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
+                    (frame_x[9:1]-14 == right2_l && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
+                    (frame_y[9:1] == top2_l      && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
+                    (frame_y[9:1] == bottom2_l   && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
+                    (frame_x[9:1]-14 == cx2_l    && frame_y[9:1] >= cy2_l-2 && frame_y[9:1] <= cy2_l+2) ||
+                    (frame_y[9:1] == cy2_l       && frame_x[9:1]-14 >= cx2_l-2 && frame_x[9:1]-14 <= cx2_l+2)
+                ) ||
+                // Comp 3
+                (
+                    (frame_x[9:1]-14 == left3_l  && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
+                    (frame_x[9:1]-14 == right3_l && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
+                    (frame_y[9:1] == top3_l      && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
+                    (frame_y[9:1] == bottom3_l   && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
+                    (frame_x[9:1]-14 == cx3_l    && frame_y[9:1] >= cy3_l-2 && frame_y[9:1] <= cy3_l+2) ||
+                    (frame_y[9:1] == cy3_l       && frame_x[9:1]-14 >= cx3_l-2 && frame_x[9:1]-14 <= cx3_l+2)
+                )
+            )) begin
+>>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
                 frame_pixel <= 12'h00F;
             end
             else begin
@@ -649,6 +788,7 @@ module Top(
         end
     end
 
+<<<<<<< HEAD
 
     // Sets timer
     Time_Countdown timer_inst (
@@ -662,6 +802,8 @@ module Top(
 
 
 
+=======
+>>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
 endmodule
 
 
