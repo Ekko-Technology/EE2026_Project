@@ -29,15 +29,18 @@ module UFDS_FIFO #(
     (* ram_style = "distributed" *) reg [ADDR_BITS:0] wr_gray_r1=0, wr_gray_r2=0;
 
     // Bin<->Gray helpers
-    wire [ADDR_BITS:0] wr_bin_n = wr_bin + (wr_en & ~wr_full);
-    wire [ADDR_BITS:0] rd_bin_n = rd_bin + (rd_en & ~rd_empty);
-    wire [ADDR_BITS:0] wr_gray_n = (wr_bin_n >> 1) ^ wr_bin_n;
-    wire [ADDR_BITS:0] rd_gray_n = (rd_bin_n >> 1) ^ rd_bin_n;
+    // Compute NEXT (incremented) pointers independently of gating to avoid combinational loops.
+    wire [ADDR_BITS:0] wr_bin_inc  = wr_bin + {{ADDR_BITS{1'b0}}, 1'b1};
+    wire [ADDR_BITS:0] rd_bin_n    = rd_bin + (rd_en & ~rd_empty);
+    wire [ADDR_BITS:0] wr_gray_inc = (wr_bin_inc >> 1) ^ wr_bin_inc;
+    wire [ADDR_BITS:0] rd_gray_n   = (rd_bin_n   >> 1) ^ rd_bin_n;
 
     // Full/Empty
-    // Full when next write Gray equals read Gray with MSBs inverted
-    wire full_nxt = (wr_gray_n == {~rd_gray_w2[ADDR_BITS:ADDR_BITS-1], rd_gray_w2[ADDR_BITS-2:0]});
-    assign wr_full = full_nxt;
+    // Full when the Gray code of (wr_bin + 1) equals read Gray with MSBs inverted.
+    // Register the flag to break any combinational dependency with wr_en gating.
+    reg wr_full_r;
+    wire full_next = (wr_gray_inc == {~rd_gray_w2[ADDR_BITS:ADDR_BITS-1], rd_gray_w2[ADDR_BITS-2:0]});
+    assign wr_full = wr_full_r;
 
     // Empty when write Gray equals current read Gray
     assign rd_empty = (wr_gray_r2 == rd_gray);
@@ -53,11 +56,13 @@ module UFDS_FIFO #(
             // synchronize read pointer into write clock
             rd_gray_w1 <= rd_gray;
             rd_gray_w2 <= rd_gray_w1;
+            // update registered full flag
+            wr_full_r <= full_next;
 
-            if (wr_en && ~wr_full) begin
+            if (wr_en && ~wr_full_r) begin
                 mem[wr_bin[ADDR_BITS-1:0]] <= wr_data;
-                wr_bin  <= wr_bin_n;
-                wr_gray <= wr_gray_n;
+                wr_bin  <= wr_bin + {{ADDR_BITS{1'b0}}, 1'b1};
+                wr_gray <= ( ( (wr_bin + {{ADDR_BITS{1'b0}}, 1'b1}) >> 1) ^ (wr_bin + {{ADDR_BITS{1'b0}}, 1'b1}) );
             end
         end
     end

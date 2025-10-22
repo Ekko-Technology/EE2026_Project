@@ -217,8 +217,9 @@ module Top(
     // sw[1] enables filtered pipeline in writer; sw[2] selects morphology; sw[3] chooses dilate(1)/erode(0)
     wire bin_filtered_valid = (sw[2]) ? (sw[3] ? pixel_valid_dilate_3x3 : pixel_valid_erode_3x3)
                                       : pixel_valid_gauss_3x3;
-    wire [17:0] bin_filtered_addr = (sw[2]) ? (sw[3] ? filtered_addr_dilate_3x3 : filtered_addr_erode_3x3)
-                                            : filtered_addr_gauss_3x3;
+    // centered write address (defined below after FRAME_PIXELS parameter)
+    wire [17:0] bin_filtered_addr;
+
     wire bin_filtered_bit   = (sw[2]) ? (sw[3] ? filtered_pixel_dilate_3x3 : filtered_pixel_erode_3x3)
                                       : threshold_bin_gauss;
 
@@ -269,6 +270,26 @@ module Top(
     wire [17:0] wr_base = wr_sel ? FRAME_PIXELS : 18'd0;
     wire [17:0] rd_base = rd_sel ? FRAME_PIXELS : 18'd0;
     wire [17:0] addrb18 = {1'b0, frame_addr} + rd_base;
+
+    // ----------- ADDRESS RECENTERING FOR 3x3 STAGES ----------- //
+    // Cancel the inherent (-1,-1) window-center shift per stage by adding
+    // (+1 row, +1 col) = +307 addresses for a 306x240 frame. Apply per-stage:
+    //   Gaussian: +307; Erode(after Gauss): +614; Dilate(after Erode): +921
+    localparam [17:0] ADDR_SHIFT1 = 18'd307;
+    localparam [17:0] ADDR_SHIFT2 = 18'd614;
+    localparam [17:0] ADDR_SHIFT3 = 18'd921;
+
+    // Add shift and clamp to the last pixel to avoid OOB at bottom/right borders
+    wire [18:0] gauss_tmp  = {1'b0, filtered_addr_gauss_3x3}  + ADDR_SHIFT1;
+    wire [18:0] erode_tmp  = {1'b0, filtered_addr_erode_3x3}  + ADDR_SHIFT2;
+    wire [18:0] dilate_tmp = {1'b0, filtered_addr_dilate_3x3} + ADDR_SHIFT3;
+
+    wire [17:0] addr_gauss_centered  = (gauss_tmp  >= FRAME_PIXELS) ? (FRAME_PIXELS - 1) : gauss_tmp[17:0];
+    wire [17:0] addr_erode_centered  = (erode_tmp  >= FRAME_PIXELS) ? (FRAME_PIXELS - 1) : erode_tmp[17:0];
+    wire [17:0] addr_dilate_centered = (dilate_tmp >= FRAME_PIXELS) ? (FRAME_PIXELS - 1) : dilate_tmp[17:0];
+
+    assign bin_filtered_addr = (sw[2]) ? (sw[3] ? addr_dilate_centered : addr_erode_centered)
+                                       : addr_gauss_centered;
 
     // Latch the write-base per frame so all writes for a frame (including padding flush)
     // target the same half. Arm on VSYNC rise, capture on the first incoming pixel (we==1)
@@ -436,13 +457,13 @@ module Top(
     //                      (bitmap_pixel ? 12'hFFF : 12'h000);
 
     // Show middle pixel value on LEDs for debugging
-    // always @(posedge clk25) begin
-    //     if (active_area && (frame_addr == 38240)) begin
-    //         led[11:0] <= image_pixel;
-    //     end else begin
-    //         led[11:0] <= led[11:0];
-    //     end
-    // end
+    always @(posedge clk25) begin
+        if (active_area && (frame_addr == 38240)) begin
+            ss_output[11:0] <= image_pixel;
+        end else begin
+            ss_output[11:0] <= ss_output[11:0];
+        end
+    end
 
 
     wire [8:0] bbox_left, bbox_right, centroid_x;
@@ -472,40 +493,30 @@ module Top(
         .ready_o(ready_o)
     );
 
+    reg [15:0] ss_output = 16'h0000;
     Seven_Seg ssd (
         .clk(clk),
-        .num( {bbox_left_latch[6:0], bbox_right_latch} ),
+        .num(ss_output),
         .dd(4'b0000),
         .seg(seg),
         .an(an)
     );
 
-    // reg [16:0] temp_addr;
-    // reg [9:0] temp_x;
-    // reg [8:0] temp_y;
     reg [8:0] bbox_left_latch, bbox_right_latch;
     reg [7:0] bbox_top_latch, bbox_bottom_latch;
-    reg [24:0] ss_counter;
-    reg [15:0] ss_update;
     always @(posedge clk25) begin
-        // Draw bbox as a rectangle outline bounded by its extents
-        // Vertical edges when x == left/right AND y within [top, bottom]
-        // Horizontal edges when y == top/bottom AND x within [left, right]
-        ss_counter = ss_counter + 1;
-        // if (ss_counter == 0) ss_update <= {bbox_top_latch, bbox_bottom_latch};
-        if (ss_counter == 0) ss_update <= {bbox_left_latch[6:0], bbox_right_latch};
-        else ss_update <= ss_update;
-
         if (frame_addr == 73439) begin
             bbox_left_latch   <= bbox_left;
             bbox_right_latch  <= bbox_right;
             bbox_top_latch    <= bbox_top;
             bbox_bottom_latch <= bbox_bottom;
-            led[8:0] <= bbox_left;
         end else begin
             // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            if (in_roi && (frame_x[9:1]-14 == bbox_left_latch || frame_x[9:1]-14 == bbox_right_latch ||
-                frame_y[9:1] == bbox_top_latch || frame_y[9:1] == bbox_bottom_latch)) begin
+            if (in_roi && 
+                (frame_x[9:1]-14 == bbox_left_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||
+                frame_x[9:1]-14 == bbox_right_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||
+                frame_y[9:1] == bbox_top_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||
+                frame_y[9:1] == bbox_bottom_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch)) begin
                 frame_pixel <= 12'h0F0;
             end
             else begin
