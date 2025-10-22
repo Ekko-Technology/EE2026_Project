@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module Top(
-    input clk, btnU,
+    input clk, btnU, btnC,
 
     output ov7670_pwdn, ov7670_reset, ov7670_xclk,
     input ov7670_href, ov7670_pclk, ov7670_vsync,
@@ -467,13 +467,13 @@ module Top(
     //                      (bitmap_pixel ? 12'hFFF : 12'h000);
 
     // Show middle pixel value on LEDs for debugging
-    always @(posedge clk25) begin
-        if (active_area && (frame_addr == 36567)) begin
-            ss_output[11:0] <= image_pixel;
-        end else begin
-            ss_output[11:0] <= ss_output[11:0];
-        end
-    end
+    // always @(posedge clk25) begin
+    //     if (active_area && (frame_addr == 36567)) begin
+    //         ss_output[11:0] <= image_pixel;
+    //     end else begin
+    //         ss_output[11:0] <= ss_output[11:0];
+    //     end
+    // end
 
 
     // ----------- UFDS BRIDGE FOR FIND CONTOURS ----------- //
@@ -522,6 +522,8 @@ module Top(
     wire [9:0] x_coord;
     wire [8:0] y_coord;
 
+    // wire [7:0] cooldown_progress;
+
     // mouse controller module
     mouse_movement mouse_ctrl (
         .clk(clk),
@@ -533,7 +535,7 @@ module Top(
         .servo_x_pwm(servo_x_pwm),
         .servo_y_pwm(servo_y_pwm),
         .led(mouse_led),
-        .vga_RGB(mouse_vga_color)
+        .cooldown_progress(cooldown_progress)
     );
 
     // always @(*) begin
@@ -543,13 +545,24 @@ module Top(
 
     // ----------- DISPLAY OUTPUTS ----------- //
     reg [15:0] ss_output = 16'h0000;
-    Seven_Seg ssd (
-        .clk(clk),
-        .num(ss_output),
-        .dd(4'b0000),
-        .seg(seg),
-        .an(an)
-    );
+
+    localparam GREEN = 12'h0F0;
+    localparam RED = 12'hF00;
+    localparam COOLDOWN = 200_000_000;
+
+
+    localparam CROSSHAIR_HEIGHT = 11;
+    wire [7:0] fill_height = (cooldown_progress * CROSSHAIR_HEIGHT) / 255;
+    wire [7:0] green_start_y = 120 + 11;        // bottom of the stem
+    wire [7:0] green_top_y = green_start_y - fill_height;    // current row index of green 
+
+    // Seven_Seg ssd (
+    //     .clk(clk),
+    //     .num(ss_output),
+    //     .dd(4'b0000),
+    //     .seg(seg),
+    //     .an(an)
+    // );
 
     // Decode concatenated outputs into per-component fields and latch once per VGA frame
     wire [9:0] left0   = comp3210_left[9:0];
@@ -601,15 +614,58 @@ module Top(
             left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
             left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
         end else begin
-            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
-                frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
-                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
-                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
-            ) begin
-                //draw red circle and crosshair at centre of screen
-                frame_pixel <= 12'h0F0;
+            // --- Crosshair drawing with cooldown-based bottom fill ---
+            // === Bottom vertical arm ===
+            if (frame_x[9:1]-14 == 153 &&
+                frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
+
+                // Green portion rises upward from bottom
+                if (frame_y[9:1] >= green_top_y)
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
             end
+
+            // === Top vertical arm ===
+            else if (frame_x[9:1]-14 == 153 &&
+                    frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
+
+                // Mirror the same cooldown progress upward
+                if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
+            end
+
+            // === Left horizontal arm ===
+            else if (frame_y[9:1] == 120 &&
+                    frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
+
+                // Turn green once cooldown crosses midpoint
+                if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
+            end
+
+            // === Right horizontal arm ===
+            else if (frame_y[9:1] == 120 &&
+                    frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
+
+                if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
+            end
+            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
+            // if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
+            //     frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
+            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
+            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
+            // ) begin
+            //     //draw red circle and crosshair at centre of screen
+            //     frame_pixel <= 12'h0F0;
+            // end
             else if (in_roi && (
                 // Comp 0
                 (
@@ -657,4 +713,53 @@ module Top(
         end
     end
 
+
+    // Sets timer
+    Time_Countdown timer_inst (
+        .clk(clk),
+        .sw(sw[3:0]),
+        .btnC(btnC),
+        .btnU(btnU),
+        .seg(seg[7:0]),
+        .an(an[3:0])
+    );
+
+
+
 endmodule
+
+
+
+
+            // // bottom vertical y
+            // if (frame_y[9:1] >= 122 && frame_y[9:1] <= 131) begin
+            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= green_top_y && frame_y[9:1] <= 120+11) begin
+            //         // Bottom vertical line (cooldown fill rising from bottom)
+            //         frame_pixel <= GREEN;
+            //     end
+            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= green_top_y) begin
+            //         // Bottom vertical line (cooldown fill rising from bottom)
+            //         frame_pixel <= RED;
+            //     end
+            // end
+
+            // // horizontal lines
+            // if (frame_y[9:1] >= 116 && frame_y[9:1] <= 124)
+            //     if (frame_y[9:1] >= green_top_y && frame_y[9:1] <= 124 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
+            //         frame_pixel <= GREEN;
+
+            //     if (frame_y[9:1] >= 116 && frame_y[9:1] <= green_top_y && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
+            //         frame_pixel <= RED;
+            // end 
+
+            // // top vertical y
+            // if (frame_y[9:1] >= 109 && frame_y[9:1] <= 118) begin
+            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= green_top_y && frame_y[9:1] <= 120-2) begin
+            //         // Bottom vertical line (cooldown fill rising from bottom)
+            //         frame_pixel <= GREEN;
+            //     end
+            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= green_top_y) begin
+            //         // Bottom vertical line (cooldown fill rising from bottom)
+            //         frame_pixel <= RED;
+            //     end
+            // end

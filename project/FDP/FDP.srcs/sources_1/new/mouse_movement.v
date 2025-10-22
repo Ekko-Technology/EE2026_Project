@@ -33,20 +33,14 @@ module mouse_movement(
     output servo_x_pwm, // PWM signal for X servo
     output servo_y_pwm, // PWM signal for Y servo
     output reg [15:0] led,  //Bullet counts
-    output reg [11:0] vga_RGB
+    output reg [7:0] cooldown_progress
     );
     
     wire [11:0] xpos;
     wire [11:0] ypos;
     wire [3:0] zpos;
 
-    // for simulation purposes
-    `ifdef SIMULATION
-        wire left = left_sim;
-        wire right = 1'b0;
-        wire middle = 1'b0;
-        wire new_event = 1'b0;
-    `else
+// for simulation purposes
     wire left, right, middle, new_event;
     
     MouseCtl mouse_instance (
@@ -67,7 +61,6 @@ module mouse_movement(
         .setmax_y(9'd480),
         .value(12'd1024)
     );
-`endif
 
     // capture the overall x and y movements of the mouse every clock edge
     reg signed [11:0] prev_xpos;
@@ -178,16 +171,16 @@ module mouse_movement(
     localparam CENTER_X = WIDTH / 2;  // 153
     localparam CENTER_Y = HEIGHT / 2;  // 120
     
-    // Crosshair parameters
-    localparam CH_HEIGHT = 20;
-    localparam CH_WIDTH  = 20;
-    localparam CH_THICKNESS = 3;
-    localparam CH_CENTER_DOT_THICKNESS = 4;
+    // // Crosshair parameters
+    // localparam CH_HEIGHT = 20;
+    // localparam CH_WIDTH  = 20;
+    // localparam CH_THICKNESS = 3;
+    // localparam CH_CENTER_DOT_THICKNESS = 4;
    
-    localparam GAP_FROM_CENTER_DOT = 5;
+    // localparam GAP_FROM_CENTER_DOT = 5;
     
     // COLOR OUTPUT
-    localparam GREEN = 12'h070;
+    localparam GREEN = 12'h0F0;
     localparam RED   = 12'hF00;
     
     reg [27:0] cooldown_timer = 0;
@@ -208,12 +201,16 @@ module mouse_movement(
             cooldown_timer <= 0;
             shot_enabled <= 1;
             bullet_count <= 16;
+            cooldown_progress <= 8'd255;
             led <= 16'hFFFF;
         end
         else begin
             // Decrement cooldown timer if not zero
             if (cooldown_timer > 0)
                 cooldown_timer <= cooldown_timer - 1;
+
+            // compute cooldown progress
+            cooldown_progress <= (cooldown_timer == 0) ? 8'd255 : (cooldown_timer * 255 / COOLDOWN);
 
             if (cooldown_timer == 0)
                 shot_enabled <= 1;
@@ -228,40 +225,40 @@ module mouse_movement(
         end
     end
    
-   wire crosshair_pixel;
-   // Crosshair horizontal and vertical arms centered on screen
-   assign crosshair_pixel = (
-       // left horizontal crosshair
-       (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
-        x_coord >= CENTER_X - GAP_FROM_CENTER_DOT - CH_WIDTH && x_coord <= CENTER_X - GAP_FROM_CENTER_DOT) ||
+//    wire crosshair_pixel;
+//    // Crosshair horizontal and vertical arms centered on screen
+//    assign crosshair_pixel = (
+//        // left horizontal crosshair
+//        (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
+//         x_coord >= CENTER_X - GAP_FROM_CENTER_DOT - CH_WIDTH && x_coord <= CENTER_X - GAP_FROM_CENTER_DOT) ||
          
-       // right horizontal crosshair
-        (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
-         x_coord >= CENTER_X + GAP_FROM_CENTER_DOT && x_coord <= CENTER_X + GAP_FROM_CENTER_DOT + CH_WIDTH) ||
+//        // right horizontal crosshair
+//         (y_coord >= CENTER_Y - CH_THICKNESS/2 && y_coord <= CENTER_Y + CH_THICKNESS/2 &&
+//          x_coord >= CENTER_X + GAP_FROM_CENTER_DOT && x_coord <= CENTER_X + GAP_FROM_CENTER_DOT + CH_WIDTH) ||
    
-       // top vertical crosshair
-       (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
-        y_coord >= CENTER_Y - GAP_FROM_CENTER_DOT - CH_HEIGHT && y_coord <= CENTER_Y - GAP_FROM_CENTER_DOT) ||
+//        // top vertical crosshair
+//        (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
+//         y_coord >= CENTER_Y - GAP_FROM_CENTER_DOT - CH_HEIGHT && y_coord <= CENTER_Y - GAP_FROM_CENTER_DOT) ||
          
-       // bottom vertical crosshair
-        (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
-         y_coord >= CENTER_Y + GAP_FROM_CENTER_DOT && y_coord <= CENTER_Y + GAP_FROM_CENTER_DOT + CH_HEIGHT) ||
+//        // bottom vertical crosshair
+//         (x_coord >= CENTER_X - CH_THICKNESS/2 && x_coord <= CENTER_X + CH_THICKNESS/2 &&
+//          y_coord >= CENTER_Y + GAP_FROM_CENTER_DOT && y_coord <= CENTER_Y + GAP_FROM_CENTER_DOT + CH_HEIGHT) ||
    
-       // Center dot
-       (x_coord >= CENTER_X - CH_CENTER_DOT_THICKNESS/2 && x_coord <= CENTER_X + CH_CENTER_DOT_THICKNESS/2 &&
-        y_coord >= CENTER_Y - CH_CENTER_DOT_THICKNESS/2 && y_coord <= CENTER_Y + CH_CENTER_DOT_THICKNESS/2)
-   );
+//        // Center dot
+//        (x_coord >= CENTER_X - CH_CENTER_DOT_THICKNESS/2 && x_coord <= CENTER_X + CH_CENTER_DOT_THICKNESS/2 &&
+//         y_coord >= CENTER_Y - CH_CENTER_DOT_THICKNESS/2 && y_coord <= CENTER_Y + CH_CENTER_DOT_THICKNESS/2)
+//    );
    
    
-    always @(*) begin
-        if (crosshair_pixel) begin
-            if (shot_enabled)
-                vga_RGB = GREEN;
-            else
-                vga_RGB = RED;
-        end else begin
-            vga_RGB = 12'h000; // background
-        end
-    end
+    // always @(*) begin
+    //     if (crosshair_pixel) begin
+    //         if (shot_enabled)
+    //             vga_RGB = GREEN;
+    //         else
+    //             vga_RGB = RED;
+    //     end else begin
+    //         vga_RGB = 12'h000; // background
+    //     end
+    // end
     
 endmodule
