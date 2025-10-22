@@ -465,7 +465,6 @@ module Top(
     //                      (bitmap_pixel ? 12'hFFF : 12'h000);
 
     // Show middle pixel value on LEDs for debugging
-<<<<<<< HEAD
     // always @(posedge clk25) begin
     //     if (active_area && (frame_addr == 36567)) begin
     //         ss_output[11:0] <= image_pixel;
@@ -473,31 +472,16 @@ module Top(
     //         ss_output[11:0] <= ss_output[11:0];
     //     end
     // end
-=======
-    always @(posedge clk25) begin
-        if (active_area && (frame_addr == 36567)) begin
-            ss_output[11:0] <= image_pixel;
-        end else begin
-            ss_output[11:0] <= ss_output[11:0];
-        end
-    end
->>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
 
 
     // ----------- UFDS BRIDGE FOR FIND CONTOURS ----------- //
 
-<<<<<<< HEAD
-    wire [9:0] bbox_left, bbox_right, centroid_x;
-    wire [8:0] bbox_top, bbox_bottom, centroid_y;
-    wire ready_o;
-=======
     // Concatenated top-4 component outputs from UFDS via Bridge
     wire [39:0] comp3210_left, comp3210_right, comp3210_cx;   // 4x {valid(1) , x[8:0]}
     wire [35:0] comp3210_top,  comp3210_bottom, comp3210_cy;  // 4x {valid(1) , y[7:0]}
     wire [63:0] comp3210_area;                                 // 4x area[15:0]
     wire [2:0]  comp_count;
     wire        ready_o;
->>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
     // Only feed UFDS within the 306x240 cropped active area (x in [14,319], y in [0,239])
     wire in_roi = active_area && (frame_x[9:1] >= 10'd14) && (frame_x[9:1] < 10'd320) && (frame_y[9:1] < 10'd240);
     // Decimate the VGA-doubled raster (640x480) to source grid (320x240):
@@ -513,14 +497,6 @@ module Top(
         .p_px(bitmap_pixel), // use same bitmap data as pixel input
         .clk(clk50),
         .ext_reset(cap_reset),
-<<<<<<< HEAD
-        .bbox_left(bbox_left),
-        .bbox_right(bbox_right),
-        .bbox_top(bbox_top),
-        .bbox_bottom(bbox_bottom),
-        .centroid_x(centroid_x),
-        .centroid_y(centroid_y),
-=======
         .comp3210_left(comp3210_left),
         .comp3210_right(comp3210_right),
         .comp3210_top(comp3210_top),
@@ -529,7 +505,6 @@ module Top(
         .comp3210_cy(comp3210_cy),
         .comp3210_area(comp3210_area),
         .comp_count(comp_count),
->>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
         .ready_o(ready_o)
     );
 
@@ -567,19 +542,8 @@ module Top(
 
 
     // ----------- DISPLAY OUTPUTS ----------- //
-<<<<<<< HEAD
-    // reg [15:0] ss_output = 16'h0000;
-    // Seven_Seg ssd (
-    //     .clk(clk),
-    //     .num(ss_output),
-    //     .dd(4'b0000),
-    //     .seg(seg),
-    //     .an(an)
-    // );
+    reg [15:0] ss_output = 16'h0000;
 
-
-
-    // Gradual color change feature
     localparam GREEN = 12'h0F0;
     localparam RED = 12'hF00;
     localparam COOLDOWN = 200_000_000;
@@ -590,96 +554,13 @@ module Top(
     wire [7:0] green_start_y = 120 + 11;        // bottom of the stem
     wire [7:0] green_top_y = green_start_y - fill_height;    // current row index of green 
 
-    reg [8:0] bbox_left_latch, bbox_right_latch;
-    reg [7:0] bbox_top_latch, bbox_bottom_latch;
-    reg [8:0] centroid_x_latch;
-    reg [7:0] centroid_y_latch;
-    wire [15:0] crosshair_radius_squared = (frame_x[9:1]-14-153)*(frame_x[9:1]-14-153) + (frame_y[9:1]-120)*(frame_y[9:1]-120);
-
-    integer crosshair_radius = 7;
-
-    always @(posedge clk25) begin
-        if (frame_addr == 73439) begin
-            bbox_left_latch   <= bbox_left;
-            bbox_right_latch  <= bbox_right;
-            bbox_top_latch    <= bbox_top;
-            bbox_bottom_latch <= bbox_bottom;
-            centroid_x_latch  <= centroid_x;
-            centroid_y_latch  <= centroid_y;
-
-        end else begin
-            // --- Crosshair drawing with cooldown-based bottom fill ---
-            // === Bottom vertical arm ===
-            if (frame_x[9:1]-14 == 153 &&
-                frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
-
-                // Green portion rises upward from bottom
-                if (frame_y[9:1] >= green_top_y)
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
-
-            // === Top vertical arm ===
-            else if (frame_x[9:1]-14 == 153 &&
-                    frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
-
-                // Mirror the same cooldown progress upward
-                if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
-
-            // === Left horizontal arm ===
-            else if (frame_y[9:1] == 120 &&
-                    frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
-
-                // Turn green once cooldown crosses midpoint
-                if (fill_height >= CROSSHAIR_HEIGHT / 2)
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
-
-            // === Right horizontal arm ===
-            else if (frame_y[9:1] == 120 &&
-                    frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
-
-                if (fill_height >= CROSSHAIR_HEIGHT / 2)
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
-            
-            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            // if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
-            //     frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
-            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
-            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
-            // ) begin
-            //     //draw red circle and crosshair at centre of screen
-            //     frame_pixel <= 12'h0F0;
-            // end
-            else if (in_roi && 
-                (
-                    frame_x[9:1]-14 == bbox_left_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox left
-                    frame_x[9:1]-14 == bbox_right_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox right
-                    frame_y[9:1] == bbox_top_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||  //bbox top
-                    frame_y[9:1] == bbox_bottom_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||  //bbox bottom
-                    frame_x[9:1]-14 == centroid_x_latch && frame_y[9:1] >= centroid_y_latch-2 && frame_y[9:1] <= centroid_y_latch+2 || //centroid vertical line
-                    frame_y[9:1] == centroid_y_latch && frame_x[9:1]-14 >= centroid_x_latch-2 && frame_x[9:1]-14 <= centroid_x_latch+2    //centroid horizontal line
-                )
-            ) begin
-=======
-    reg [15:0] ss_output = 16'h0000;
-    Seven_Seg ssd (
-        .clk(clk),
-        .num(ss_output),
-        .dd(4'b0000),
-        .seg(seg),
-        .an(an)
-    );
+    // Seven_Seg ssd (
+    //     .clk(clk),
+    //     .num(ss_output),
+    //     .dd(4'b0000),
+    //     .seg(seg),
+    //     .an(an)
+    // );
 
     // Decode concatenated outputs into per-component fields and latch once per VGA frame
     wire [9:0] left0   = comp3210_left[9:0];
@@ -731,15 +612,58 @@ module Top(
             left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
             left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
         end else begin
-            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
-                frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
-                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
-                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
-            ) begin
-                //draw red circle and crosshair at centre of screen
-                frame_pixel <= 12'h0F0;
+            // --- Crosshair drawing with cooldown-based bottom fill ---
+            // === Bottom vertical arm ===
+            if (frame_x[9:1]-14 == 153 &&
+                frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
+
+                // Green portion rises upward from bottom
+                if (frame_y[9:1] >= green_top_y)
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
             end
+
+            // === Top vertical arm ===
+            else if (frame_x[9:1]-14 == 153 &&
+                    frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
+
+                // Mirror the same cooldown progress upward
+                if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
+            end
+
+            // === Left horizontal arm ===
+            else if (frame_y[9:1] == 120 &&
+                    frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
+
+                // Turn green once cooldown crosses midpoint
+                if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
+            end
+
+            // === Right horizontal arm ===
+            else if (frame_y[9:1] == 120 &&
+                    frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
+
+                if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                    frame_pixel <= GREEN;
+                else
+                    frame_pixel <= RED;
+            end
+            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
+            // if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
+            //     frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
+            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
+            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
+            // ) begin
+            //     //draw red circle and crosshair at centre of screen
+            //     frame_pixel <= 12'h0F0;
+            // end
             else if (in_roi && (
                 // Comp 0
                 (
@@ -778,7 +702,6 @@ module Top(
                     (frame_y[9:1] == cy3_l       && frame_x[9:1]-14 >= cx3_l-2 && frame_x[9:1]-14 <= cx3_l+2)
                 )
             )) begin
->>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
                 frame_pixel <= 12'h00F;
             end
             else begin
@@ -788,7 +711,6 @@ module Top(
         end
     end
 
-<<<<<<< HEAD
 
     // Sets timer
     Time_Countdown timer_inst (
@@ -802,8 +724,6 @@ module Top(
 
 
 
-=======
->>>>>>> 3dc90a101e5a55603eab2c9b2cbf1d18b5f4457c
 endmodule
 
 
