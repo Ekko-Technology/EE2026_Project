@@ -13,6 +13,8 @@ module Top(
 
     inout mouse_clk,
     inout mouse_data,
+    output servo_x_pwm,
+    output servo_y_pwm,
 
     output [7:0] seg,
     output [3:0] an,
