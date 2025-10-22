@@ -26,7 +26,7 @@ module UFDS_Bridge (
     // FIFO signals
     wire        wr_full;
     wire        rd_empty;
-    (* ram_style = "distributed" *) reg         rd_en;
+    reg         rd_en;
     wire [3:0]  rd_data;
 
     // Enqueue every valid pixel word (4 bits)
@@ -48,8 +48,8 @@ module UFDS_Bridge (
     wire ready_i;
     assign ready_o = ready_i;
 
-    (* ram_style = "distributed" *) reg        in_valid_q;
-    (* ram_style = "distributed" *) reg  fs_q, ls_q, fe_q, px_q;
+    reg        in_valid_q;
+    reg  fs_q, ls_q, fe_q, px_q;
 
     UFDS_Detector u_ufds (
         .clk(clk),
@@ -72,9 +72,9 @@ module UFDS_Bridge (
     );
 
     // Simple 1-word read buffer to align to UFDS ready
-    (* ram_style = "distributed" *) reg        have;
-    (* ram_style = "distributed" *) reg [3:0] hold;
-    (* ram_style = "distributed" *) reg        pop_inflight;
+    reg        have;
+    reg [3:0] hold;
+    reg        pop_inflight;
 
     always @(posedge clk) begin
         if (ext_reset | p_rst) begin

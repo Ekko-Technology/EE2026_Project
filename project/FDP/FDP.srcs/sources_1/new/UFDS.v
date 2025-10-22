@@ -58,8 +58,8 @@ localparam integer y_bitsize = 8;
 localparam integer label_bits = 9; // rmb label == 0 is the background and supports up to 4095 labels (can reduce if dont need this many labels)
 
 // current pixel coordinates (increment x each pixel, on line_start x=0 and y increment by 1)
-(* ram_style = "distributed" *) reg [x_bitsize-1:0] x;
-(* ram_style = "distributed" *) reg [y_bitsize-1:0] y;
+reg [x_bitsize-1:0] x;
+reg [y_bitsize-1:0] y;
 
 /* 
  *UFDS need to check neighbours' labels, we use 2 lines of buffer (reduced neighbours) 
@@ -106,38 +106,38 @@ wire [label_bits-1:0] upright_label = (x == WIDTH-1 || y == 0) ? 0 :
                                    (toggle_line == 0) ? row0_labels[x+1] : row1_labels[x+1];
 
 // temporary registers to read and write neighbour labels
-(* ram_style = "distributed" *) reg [label_bits-1:0] left;
-(* ram_style = "distributed" *) reg [label_bits-1:0] up;
-(* ram_style = "distributed" *) reg [label_bits-1:0] upleft;
-(* ram_style = "distributed" *) reg [label_bits-1:0] upright;
-(* ram_style = "distributed" *) reg [label_bits-1:0] root_left;
-(* ram_style = "distributed" *) reg [label_bits-1:0] root_up;
-(* ram_style = "distributed" *) reg [label_bits-1:0] root_upleft;
-(* ram_style = "distributed" *) reg [label_bits-1:0] root_upright;
-(* ram_style = "distributed" *) reg [label_bits-1:0] R; // final root label for current pixel
-(* ram_style = "distributed" *) reg [label_bits-1:0] R_next; // temp to get next smallest root
+reg [label_bits-1:0] left;
+reg [label_bits-1:0] up;
+reg [label_bits-1:0] upleft;
+reg [label_bits-1:0] upright;
+reg [label_bits-1:0] root_left;
+reg [label_bits-1:0] root_up;
+reg [label_bits-1:0] root_upleft;
+reg [label_bits-1:0] root_upright;
+reg [label_bits-1:0] R; // final root label for current pixel
+reg [label_bits-1:0] R_next; // temp to get next smallest root
 
 // temporary counters to help me walk along the width and labels during a sweep, to not touch global ref for x coord 
-(* ram_style = "distributed" *) reg [x_bitsize-1:0] init_width_idx;
-(* ram_style = "distributed" *) reg [label_bits-1:0] init_label_idx;
+reg [x_bitsize-1:0] init_width_idx;
+reg [label_bits-1:0] init_label_idx;
 
 // temporary registers to help in find() aka the find engine
 // reg [label_bits-1:0] find_curr; // used in S_FIND_* states to follow parents to find root of component iteratively
 
 // temporary registers to help in union() aka the union engine (which uses find engine twice, then attach and merge stats)
-(* ram_style = "distributed" *) reg [label_bits-1:0] ua, ub; // inputs
-(* ram_style = "distributed" *) reg [label_bits-1:0] ra, rb; // roots
+reg [label_bits-1:0] ua, ub; // inputs
+reg [label_bits-1:0] ra, rb; // roots
 
 // wire [label_bits-1:0] parent_curr = parent[find_curr];
 // wire [label_bits-1:0] rootR_now = (parent[R]==R) ? R : parent[R]; // root of R now (after a union)
 
-(* ram_style = "distributed" *) reg [label_bits-1:0] tmp;
-(* ram_style = "distributed" *) reg curr_pix_q;
+reg [label_bits-1:0] tmp;
+reg curr_pix_q;
 
 // output stuff
-(* ram_style = "distributed" *) reg [16:0] ua_area_new;         // next area when adding a pixel
-(* ram_style = "distributed" *) reg [16:0] best_area;           // running largest area
-(* ram_style = "distributed" *) reg [label_bits-1:0] best_lbl;  // label of current best
+reg [16:0] ua_area_new;         // next area when adding a pixel
+reg [16:0] best_area;           // running largest area
+reg [label_bits-1:0] best_lbl;  // label of current best
 
 
 

@@ -64,9 +64,17 @@ module Top(
     );
 
     // ----------- OV7670 CAMERA CONTROLLER ----------- //
+    // Generate a single-cycle resend pulse in the 24 MHz camera clock domain
+    // so a button press replays the full I2C register sequence once.
+    reg [2:0] btnU_sync24 = 3'b000;
+    always @(posedge clk24) begin
+        btnU_sync24 <= {btnU_sync24[1:0], btnU};
+    end
+    wire cam_resend_pulse = btnU_sync24[0] & ~btnU_sync24[1];
+
     OV7670_Controller ov7670(
         .clk(clk24),
-        .resend(btnU),
+        .resend(cam_resend_pulse),
         .config_finished(),
         .sioc(ov7670_sioc),
         .siod(ov7670_siod),
@@ -466,6 +474,8 @@ module Top(
     end
 
 
+    // ----------- UFDS BRIDGE FOR FIND CONTOURS ----------- //
+
     wire [8:0] bbox_left, bbox_right, centroid_x;
     wire [7:0] bbox_top, bbox_bottom, centroid_y;
     wire ready_o;
@@ -493,40 +503,7 @@ module Top(
         .ready_o(ready_o)
     );
 
-    reg [15:0] ss_output = 16'h0000;
-    Seven_Seg ssd (
-        .clk(clk),
-        .num(ss_output),
-        .dd(4'b0000),
-        .seg(seg),
-        .an(an)
-    );
-
-    reg [8:0] bbox_left_latch, bbox_right_latch;
-    reg [7:0] bbox_top_latch, bbox_bottom_latch;
-    always @(posedge clk25) begin
-        if (frame_addr == 73439) begin
-            bbox_left_latch   <= bbox_left;
-            bbox_right_latch  <= bbox_right;
-            bbox_top_latch    <= bbox_top;
-            bbox_bottom_latch <= bbox_bottom;
-        end else begin
-            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            if (in_roi && 
-                (frame_x[9:1]-14 == bbox_left_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||
-                frame_x[9:1]-14 == bbox_right_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||
-                frame_y[9:1] == bbox_top_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||
-                frame_y[9:1] == bbox_bottom_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch)) begin
-                frame_pixel <= 12'h0F0;
-            end
-            else begin
-                if (sw[0]) frame_pixel <= (bitmap_pixel ? 12'hFFF : 12'h000);
-                else frame_pixel <= image_pixel;
-            end
-        end
-    end
-
-
+    // ----------- MOUSE CONTROLLER ----------- //
     wire [15:0] mouse_led;
     wire [11:0] mouse_vga_color;
 
@@ -557,9 +534,55 @@ module Top(
     // end
 
 
-    // Combine camera and crosshair overlay colors
-    // assign frame_pixel = ((~sw[0])
-    //                         ? ( image_pixel )
-    //                         : ( bitmap_pixel ? 12'hFFF : 12'h000) );
+    // ----------- DISPLAY OUTPUTS ----------- //
+    reg [15:0] ss_output = 16'h0000;
+    Seven_Seg ssd (
+        .clk(clk),
+        .num(ss_output),
+        .dd(4'b0000),
+        .seg(seg),
+        .an(an)
+    );
+
+    reg [8:0] bbox_left_latch, bbox_right_latch;
+    reg [7:0] bbox_top_latch, bbox_bottom_latch;
+    reg [8:0] centroid_x_latch;
+    reg [7:0] centroid_y_latch;
+    wire [15:0] crosshair_radius_squared = (frame_x[9:1]-14-153)*(frame_x[9:1]-14-153) + (frame_y[9:1]-120)*(frame_y[9:1]-120);
+    integer crosshair_radius = 7;
+    always @(posedge clk25) begin
+        if (frame_addr == 73439) begin
+            bbox_left_latch   <= bbox_left;
+            bbox_right_latch  <= bbox_right;
+            bbox_top_latch    <= bbox_top;
+            bbox_bottom_latch <= bbox_bottom;
+            centroid_x_latch  <= centroid_x;
+            centroid_y_latch  <= centroid_y;
+        end else begin
+            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
+            if (
+                frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
+                frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
+                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
+                frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
+            ) begin
+                //draw red circle and crosshair at centre of screen
+                frame_pixel <= 12'h0F0;
+            end
+            else if (in_roi && 
+                (frame_x[9:1]-14 == bbox_left_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox left
+                frame_x[9:1]-14 == bbox_right_latch && frame_y[9:1] >= bbox_top_latch && frame_y[9:1] <= bbox_bottom_latch ||   //bbox right
+                frame_y[9:1] == bbox_top_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch ||  //bbox top
+                frame_y[9:1] == bbox_bottom_latch && frame_x[9:1]-14 >= bbox_left_latch && frame_x[9:1]-14 <= bbox_right_latch   //bbox bottom
+            )
+            ) begin
+                frame_pixel <= 12'h00F;
+            end
+            else begin
+                if (sw[0]) frame_pixel <= (bitmap_pixel ? 12'hFFF : 12'h000);
+                else frame_pixel <= image_pixel;
+            end
+        end
+    end
 
 endmodule
