@@ -165,13 +165,11 @@
         </FileInfo>
       </File>
       <File Path="$PSRCDIR/sources_1/imports/Desktop/Mouse_Control.vhd">
-      <File Path="$PSRCDIR/sources_1/imports/Desktop/Mouse_Control.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Desktop/Ps2Interface.vhd">
       <File Path="$PSRCDIR/sources_1/imports/Desktop/Ps2Interface.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
@@ -222,7 +220,6 @@
       <Config>
         <Option Name="DesignMode" Val="RTL"/>
         <Option Name="TopModule" Val="Top"/>
-        <Option Name="TopAutoSet" Val="TRUE"/>
         <Option Name="TopAutoSet" Val="TRUE"/>
       </Config>
     </FileSet>
@@ -292,17 +289,6 @@
         </FileInfo>
       </File>
       <File Path="$PSRCDIR/sim_1/new/Median_Filter_tb.v">
-      <File Path="$PPRDIR/ufds_sim_behav.wcfg">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PPRDIR/median_filter_setup.wcfg">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sim_1/new/Median_Filter_tb.v">
         <FileInfo>
           <Attr Name="AutoDisabled" Val="1"/>
           <Attr Name="UsedIn" Val="synthesis"/>
@@ -343,15 +329,12 @@
     </FileSet>
     <FileSet Name="display_clocks" Type="BlockSrcs" RelSrcDir="$PSRCDIR/display_clocks">
       <File Path="$PSRCDIR/sources_1/ip/display_clocks.xcix">
-    <FileSet Name="display_clocks" Type="BlockSrcs" RelSrcDir="$PSRCDIR/display_clocks">
-      <File Path="$PSRCDIR/sources_1/ip/display_clocks.xcix">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/ip/display_clocks/display_clocks.xci">
       <File Path="$PSRCDIR/sources_1/ip/display_clocks/display_clocks.xci">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
@@ -360,7 +343,6 @@
         </FileInfo>
       </File>
       <Config>
-        <Option Name="TopModule" Val="display_clocks"/>
         <Option Name="TopModule" Val="display_clocks"/>
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
@@ -410,7 +392,6 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
     </Run>
     <Run Id="display_clocks_synth_1" Type="Ft3:Synth" SrcSet="display_clocks" Part="xc7a35tcpg236-1" ConstrsSet="display_clocks" Description="Vivado Synthesis Defaults" WriteIncrSynthDcp="false" Dir="$PRUNDIR/display_clocks_synth_1" IncludeInArchive="true">
-    <Run Id="display_clocks_synth_1" Type="Ft3:Synth" SrcSet="display_clocks" Part="xc7a35tcpg236-1" ConstrsSet="display_clocks" Description="Vivado Synthesis Defaults" WriteIncrSynthDcp="false" Dir="$PRUNDIR/display_clocks_synth_1" IncludeInArchive="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2018"/>
         <Step Id="synth_design"/>
@@ -452,7 +433,6 @@
       <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2018"/>
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
     </Run>
-    <Run Id="display_clocks_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcpg236-1" ConstrsSet="display_clocks" Description="Default settings for Implementation." WriteIncrSynthDcp="false" SynthRun="display_clocks_synth_1" IncludeInArchive="false" GenFullBitstream="true">
     <Run Id="display_clocks_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcpg236-1" ConstrsSet="display_clocks" Description="Default settings for Implementation." WriteIncrSynthDcp="false" SynthRun="display_clocks_synth_1" IncludeInArchive="false" GenFullBitstream="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2018"/>

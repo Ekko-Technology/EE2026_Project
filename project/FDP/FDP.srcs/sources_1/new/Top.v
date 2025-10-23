@@ -572,7 +572,7 @@ module Top(
 
     localparam CROSSHAIR_HEIGHT = 11;
     wire [7:0] fill_height = (cooldown_progress * CROSSHAIR_HEIGHT) / 255;
-    wire [7:0] green_start_y = 120 + 11;        // bottom of the stem
+    wire [7:0] green_start_y = 120 + CROSSHAIR_HEIGHT;        // bottom of the stem
     wire [7:0] green_top_y = green_start_y - fill_height;    // current row index of green 
 
     // Decode concatenated outputs into per-component fields and latch once per VGA frame
@@ -615,8 +615,7 @@ module Top(
     reg [8:0] top1_l, bottom1_l, cy1_l;
     reg [8:0] top2_l, bottom2_l, cy2_l;
     reg [8:0] top3_l, bottom3_l, cy3_l;
-    wire [15:0] crosshair_radius_squared = (frame_x[9:1]-14-153)*(frame_x[9:1]-14-153) + (frame_y[9:1]-120)*(frame_y[9:1]-120);
-    integer crosshair_radius = 7;
+
     always @(posedge clk25) begin
         if (frame_addr == 73439) begin
             // snapshot UFDS results once per VGA frame
@@ -668,15 +667,6 @@ module Top(
                 else
                     frame_pixel <= RED;
             end
-            // Draw bbox overlay only inside ROI to avoid artifacts outside the cropped area
-            // if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11 || //bottom long vertical line
-            //     frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2 || //top long vertical line
-            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2 || //left long horizontal line
-            //     frame_y[9:1] == 120 && frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11 //right long horizontal line
-            // ) begin
-            //     //draw red circle and crosshair at centre of screen
-            //     frame_pixel <= 12'h0F0;
-            // end
             else if (in_roi && (
                 // Comp 0
                 (
