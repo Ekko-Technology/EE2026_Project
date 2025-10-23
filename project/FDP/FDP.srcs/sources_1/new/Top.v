@@ -464,8 +464,8 @@ module Top(
     wire servo_y_pwm;
 
     // temporary holder for screen pixel coordinates (to be replaced)
-    wire [9:0] x_coord;
-    wire [8:0] y_coord;
+    wire [13:0] x_coord;
+    wire [13:0] y_coord;
 
     // wire [7:0] cooldown_progress;
 

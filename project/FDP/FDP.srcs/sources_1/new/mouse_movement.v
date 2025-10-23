@@ -23,8 +23,8 @@
 module mouse_movement(
     input clk,
     input btnU, // reset
-    input [9:0] x_coord,  // pixel index width
-    input [8:0] y_coord, // pixel index height
+    input [13:0] x_coord,  // pixel index width
+    input [13:0] y_coord, // pixel index height
     inout mouse_clk,  //PS2 mouse clock
     inout mouse_data,  //PS2 data packets
     `ifdef SIMULATION
@@ -36,8 +36,8 @@ module mouse_movement(
     output reg [7:0] cooldown_progress
     );
     
-    wire [11:0] xpos;
-    wire [11:0] ypos;
+    wire [13:0] xpos;
+    wire [13:0] ypos;
     wire [3:0] zpos;
 
 // for simulation purposes
@@ -55,19 +55,30 @@ module mouse_movement(
         .middle(middle),
         .right(right),
         .new_event(new_event),
-        .setx(1'b0),
-        .sety(1'b0),
-        .setmax_x(10'd640),
-        .setmax_y(9'd480),
-        .value(12'd1024)
+        // .setx(1'b0),
+        // .sety(1'b0),
+        // .setmax_x(10'd640),
+        // .setmax_y(9'd480),
+        .setx(),
+        .sety(),
+        .setmax_x(),
+        .setmax_y(),
+        // .value(12'd1024)
+        .value()
     );
 
     // capture the overall x and y movements of the mouse every clock edge
-    reg signed [11:0] prev_xpos;
-    reg signed [11:0] prev_ypos;
+    reg signed [13:0] prev_xpos;
+    reg signed [13:0] prev_ypos;
     // store deltas with more bits since we are using signed magnitudes 
     reg signed [15:0] delta_x;
     reg signed [15:0] delta_y;
+
+    // If input resolution increased (14-bit) but original behavior assumed 12-bit,
+    // shift deltas down by COORD_SCALE_SHIFT bits to keep the same magnitude range.
+    localparam COORD_SCALE_SHIFT = 2; // 14-bit -> 12-bit: shift right by 2
+    wire signed [15:0] scaled_delta_x = delta_x >>> COORD_SCALE_SHIFT;
+    wire signed [15:0] scaled_delta_y = delta_y >>> COORD_SCALE_SHIFT;
 
     // Servo angles
     reg signed [15:0] servo_x_angle;
@@ -100,19 +111,19 @@ module mouse_movement(
 
     
         if (new_event) begin
-            // Filter X
-            if (delta_x > MIN_MOVE)
-                filtered_x = (delta_x > MAX_MOVE) ? MAX_MOVE : delta_x;
-            else if (delta_x < -MIN_MOVE)
-                filtered_x = (delta_x < -MAX_MOVE) ? -MAX_MOVE : delta_x;
+            // Filter X (use scaled deltas so behavior matches original 12-bit inputs)
+            if (scaled_delta_x > MIN_MOVE)
+                filtered_x = (scaled_delta_x > MAX_MOVE) ? MAX_MOVE : scaled_delta_x;
+            else if (scaled_delta_x < -MIN_MOVE)
+                filtered_x = (scaled_delta_x < -MAX_MOVE) ? -MAX_MOVE : scaled_delta_x;
             else
                 filtered_x = 0;
 
             // Filter Y
-            if (delta_y > MIN_MOVE)
-                filtered_y = (delta_y > MAX_MOVE) ? MAX_MOVE : delta_y;
-            else if (delta_y < -MIN_MOVE)
-                filtered_y = (delta_y < -MAX_MOVE) ? -MAX_MOVE : delta_y;
+            if (scaled_delta_y > MIN_MOVE)
+                filtered_y = (scaled_delta_y > MAX_MOVE) ? MAX_MOVE : scaled_delta_y;
+            else if (scaled_delta_y < -MIN_MOVE)
+                filtered_y = (scaled_delta_y < -MAX_MOVE) ? -MAX_MOVE : scaled_delta_y;
             else
                 filtered_y = 0;
 
@@ -142,9 +153,31 @@ module mouse_movement(
     //         pulse_widths[i] = 100_000 + (i * 100_000 / 180);
     //     end
     // end
-    // Convert servo angle (0–180 degrees) to pulse width (1 ms – 2 ms)
-    wire [20:0] pulse_width_x = 100_000 + ((180 - servo_x_angle) * 100_000 / 180);
-    wire [20:0] pulse_width_y = 100_000 + (servo_y_angle * 100_000 / 180);
+    // Map raw mouse coordinate directly to pulse width (no runtime division):
+    // raw in 0..IN_MAX maps to 100_000..200_000
+    // For X we keep previous inversion (0->max pulse, IN_MAX->min pulse)
+    // Now using full xpos/ypos width (14 bits). Map 0..16383 -> 100_000..200_000
+    localparam integer IN_MAX = 14'd16383; // raw input max (14-bit)
+    localparam integer FP_N  = 16; // fractional bits for fixed-point reciprocal
+    // FP_K = round(100000 * 2^FP_N / IN_MAX)
+    // 100000 * 65536 / 16383 ≈ 400024.415 -> use 400024
+    localparam integer FP_K  = 400024; // precomputed constant for 100000/16383 * 2^16
+
+    // clamp raw inputs to IN_MAX (now 14 bits)
+    wire [13:0] raw_x = (xpos > IN_MAX) ? IN_MAX : xpos[13:0];
+    wire [13:0] raw_y = (ypos > IN_MAX) ? IN_MAX : ypos[13:0];
+
+    // reverse X like previous code: use IN_MAX - raw_x
+    wire [13:0] raw_x_rev = IN_MAX - raw_x;
+
+    // multiply then shift to divide by IN_MAX (using FP_K)
+    // widen multiply to avoid overflow: raw(14) * FP_K(~19) => ~33 bits; use 40 bits for headroom
+    wire [39:0] mult_x = raw_x_rev * FP_K;
+    wire [39:0] mult_y = raw_y * FP_K;
+
+    // add rounding and shift down by FP_N fractional bits
+    wire [20:0] pulse_width_x = 100_000 + ((mult_x + (1 << (FP_N-1))) >> FP_N);
+    wire [20:0] pulse_width_y = 100_000 + ((mult_y + (1 << (FP_N-1))) >> FP_N);
 
     always @(posedge clk) begin
         // Reset counter every 20 ms as most servo motors works with such
