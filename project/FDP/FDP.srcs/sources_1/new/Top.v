@@ -8,8 +8,8 @@ module Top(
     inout ov7670_siod,
     output ov7670_sioc,
     input [7:0] ov7670_d,
-    output reg [15:0] led,
-    input [4:0] sw,
+    output [15:0] led,
+    input [15:0] sw,
 
     inout mouse_clk,
     inout mouse_data,
@@ -18,6 +18,10 @@ module Top(
 
     output [7:0] seg,
     output [3:0] an,
+
+    // UART pins
+    output uart_tx,
+    input  uart_rx,
 
     output vga_Hsync,
     output vga_Vsync,
@@ -322,60 +326,7 @@ module Top(
         end
     end
 
-    // write control registers for both RGB frame buffer and 1-bit bitmap buffer
-    // reg rgb_we_w;   // write enable for RGB frame buffer
-    // reg bmp_we_w;   // write enable for bitmap buffer
-    // reg [17:0] rgb_waddr18_r; // write address for RGB frame buffer (absolute with base)
-    // reg [17:0] bmp_waddr18_r; // write address for bitmap buffer (absolute with base)
-    // reg [11:0] rgb_dina_r; // RGB data to image_mem
-    // reg bmp_dina_r; // bitmap data to Dual_Port_Buffer
-    // reg we_latch; // latch to detect first pclk high after we
-
-    // always @(posedge clk50) begin
-    //     if (cap_reset) begin
-    //         rgb_we_w <= 1'b0;
-    //         bmp_we_w <= 1'b0;
-    //         rgb_waddr18_r <= 18'd0;
-    //         bmp_waddr18_r <= 18'd0;
-    //         rgb_dina_r <= 12'd0;
-    //         bmp_dina_r <= 1'b0;
-    //         we_latch <= 1'b0;
-    //     end else begin
-    //         rgb_we_w <= 1'b0; // default no write
-    //         bmp_we_w <= 1'b0; // default no write
-
-    //         if (we && ~we_latch) begin
-    //             // new pixel data and first time polled high pclk, so just write raw thresholded pixel
-    //             we_latch <= 1'b1;
-    //             rgb_we_w <= 1'b1;
-    //             rgb_waddr18_r <= {1'b0, addr} + wr_base_frame;
-    //             rgb_dina_r <= dout;
-    //             // bitmap bit from raw pixel (same address as RGB)
-    //             bmp_we_w <= 1'b1;
-    //             bmp_waddr18_r <= {1'b0, addr} + wr_base_frame;
-    //             bmp_dina_r <= threshold_pixel;
-    //         end
-    //         else begin
-    //             if (!we && we_latch) begin
-    //                 // reset latch on pclk low
-    //                 we_latch <= 1'b0;
-    //             end
-    //             // either no new pixel data, or already read in current pclk high, so check convolution filters to overwrite old pixels
-    //             if (sw[1] && pixel_valid_gauss_3x3) begin
-    //                 //only edit bitmap based on filtered pixel
-    //                 bmp_we_w <= 1'b1;
-    //                 bmp_waddr18_r <= filtered_addr_gauss_3x3 + wr_base_frame;
-    //                 bmp_dina_r <= threshold_pixel;
-    //             end
-    //             // if (sw[2] && pixel_valid_erode_3x3) begin
-    //             //     //only edit bitmap based on filtered pixel
-    //             //     bmp_we_w <= 1'b1;
-    //             //     bmp_waddr18_r <= filtered_addr_erode_3x3 + wr_base_frame;
-    //             //     bmp_dina_r <= filtered_pixel_erode_3x3;
-    //             // end
-    //         end
-    //     end
-    // end
+    //----------- FRAME BUFFER WRITERS ----------- //
 
     // Unified write controls for both RGB frame buffer and 1-bit bitmap buffer
     // Share write enable and address; keep separate data for RGB (12-bit) and bitmap (1-bit)
@@ -449,32 +400,26 @@ module Top(
         .doutb(image_pixel)   // read RGB444
     );
 
-    //----------- BITMAP BUFFER (1-bit) ----------- //
+    //----------- BITMAP STREAM (1-bit, synced to VGA read) ----------- //
+    // Eliminate the dedicated bitmap BRAM; derive the bitmap bit on-the-fly
+    // by thresholding the RGB pixel read from the frame buffer (image_pixel).
+    // This keeps p_px aligned with addrb18/clk25 and removes the large 1-bit double buffer.
     wire bitmap_pixel;
+    assign bitmap_pixel = (
+        (image_pixel[3:0]  >= RGB_THRESHOLD[23:20]) && (image_pixel[3:0]  <= RGB_THRESHOLD[19:16]) && // B in range
+        (image_pixel[7:4]  >= RGB_THRESHOLD[15:12]) && (image_pixel[7:4]  <= RGB_THRESHOLD[11:8])  && // G in range
+        (image_pixel[11:8] >= RGB_THRESHOLD[7:4])   && (image_pixel[11:8] <= RGB_THRESHOLD[3:0])     // R in range
+    ) ? 1'b1 : 1'b0;
 
-    Dual_Port_Buffer bitmap_buffer(
-        .clka(ov7670_pclk),
-        .we(we_w),
-        .addra(waddr18_r),
-        .dina(bmp_dina_r), // write bitmap pixel
-        .clkb(clk25),
-        .addrb(addrb18),
-        .doutb(bitmap_pixel) // read bitmap pixel
-    );
-
-    // Direct RGB444 path
-    // assign frame_pixel = (~sw[0]) ? image_pixel :
-    //                      (bitmap_pixel ? 12'hFFF : 12'h000);
-
-    // Show middle pixel value on LEDs for debugging
-    // always @(posedge clk25) begin
-    //     if (active_area && (frame_addr == 36567)) begin
-    //         ss_output[11:0] <= image_pixel;
-    //     end else begin
-    //         ss_output[11:0] <= ss_output[11:0];
-    //     end
-    // end
-
+    // Dual_Port_Buffer bitmap_buffer(
+    //     .clka(ov7670_pclk),
+    //     .we(we_w),
+    //     .addra(waddr18_r),
+    //     .dina(bmp_dina_r), // write bitmap pixel
+    //     .clkb(clk25),
+    //     .addrb(addrb18),
+    //     .doutb(bitmap_pixel) // read bitmap pixel
+    // );
 
     // ----------- UFDS BRIDGE FOR FIND CONTOURS ----------- //
 
@@ -542,12 +487,86 @@ module Top(
     //     led = mouse_led;
     // end
 
+    // ----------- UART CONTROLLER ----------- //
+    // Controller encapsulates TX/RX UARTs with 10-byte FIFOs
+    reg  [79:0] tx_fifo_payload = 80'h09080706050403020100; // initial pattern (MSB..LSB = 09..00)
+    reg         tx_fifo_wr_en   = 1'b0;                     // 1-cycle strobe to enqueue a 10-byte burst
+    wire [79:0] rx_fifo_payload;
+    reg [79:0] rx_fifo_payload_buf;
+    wire        rx_fifo_rd_en;                               // 1-cycle strobe when 10 bytes received
+
+    UART_Controller u_uart (
+        .clk(clk50),
+        .rst(btnU),
+        .tx_fifo(tx_fifo_payload),
+        .tx_fifo_wr_en(tx_fifo_wr_en),
+        .tx_pin(uart_tx),
+        .rx_fifo(rx_fifo_payload),
+        .rx_fifo_rd_en(rx_fifo_rd_en),
+        .rx_pin(uart_rx)
+    );
+
+    // Generate a new 10-byte sequence once per second and trigger a TX burst.
+    // Sequence is base..base+9 in LSB..MSB, so the hex prints as (base+9 ... base)
+    reg [26:0] one_sec_counter = 27'd0;
+    reg [7:0]  base_byte = 8'd0;
+    always @(posedge clk50) begin
+        tx_fifo_wr_en <= 1'b0; // default low
+        one_sec_counter <= one_sec_counter + 1;
+        if (one_sec_counter == 27'd50_000_000) begin
+            one_sec_counter <= 27'd0;
+            base_byte <= base_byte + 8'd1;
+            // Pack bytes: [7:0]=base, [15:8]=base+1, ... [79:72]=base+9
+            tx_fifo_payload[7:0]    <= base_byte;
+            tx_fifo_payload[15:8]   <= base_byte + 8'd1;
+            tx_fifo_payload[23:16]  <= base_byte + 8'd2;
+            tx_fifo_payload[31:24]  <= base_byte + 8'd3;
+            tx_fifo_payload[39:32]  <= base_byte + 8'd4;
+            tx_fifo_payload[47:40]  <= base_byte + 8'd5;
+            tx_fifo_payload[55:48]  <= base_byte + 8'd6;
+            tx_fifo_payload[63:56]  <= base_byte + 8'd7;
+            tx_fifo_payload[71:64]  <= base_byte + 8'd8;
+            tx_fifo_payload[79:72]  <= base_byte + 8'd9;
+            tx_fifo_wr_en <= 1'b1; // strobe send
+        end
+    end
+
+    always @(posedge rx_fifo_rd_en) begin
+        rx_fifo_payload_buf <= rx_fifo_payload;
+    end
+
+    // 7-seg display selection: choose 16-bit window from either TX or RX payload
+    wire [79:0] uart_dbg = sw[15] ? rx_fifo_payload_buf : tx_fifo_payload;
+    wire [15:0] ss_output =
+        (sw[11]) ? uart_dbg[79:64] :
+        (sw[12]) ? uart_dbg[63:48] :
+        (sw[13]) ? uart_dbg[47:32] :
+        (sw[14]) ? uart_dbg[31:16] :
+                   uart_dbg[15:0];
+
+    // Optional LEDs for quick UART debug
+    assign led[0] = tx_fifo_wr_en;     // TX trigger
+    assign led[1] = rx_fifo_rd_en;     // RX 10-byte ready
+
+    // Show middle pixel value on LEDs for debugging
+    // always @(posedge clk25) begin
+    //     if (active_area && (frame_addr == 36567)) begin
+    //         ss_output[11:0] <= image_pixel;
+    //     end else begin
+    //         ss_output[11:0] <= ss_output[11:0];
+    //     end
+    // end
+    Seven_Seg ssd (
+        .clk(clk),
+        .num(ss_output),
+        .dd(4'b0000),
+        .seg(seg),
+        .an(an)
+    );
 
     // ----------- DISPLAY OUTPUTS ----------- //
-    reg [15:0] ss_output = 16'h0000;
-
     localparam GREEN = 12'h0F0;
-    localparam RED = 12'hF00;
+    localparam RED = 12'h00F;
     localparam COOLDOWN = 200_000_000;
 
 
@@ -555,14 +574,6 @@ module Top(
     wire [7:0] fill_height = (cooldown_progress * CROSSHAIR_HEIGHT) / 255;
     wire [7:0] green_start_y = 120 + 11;        // bottom of the stem
     wire [7:0] green_top_y = green_start_y - fill_height;    // current row index of green 
-
-    // Seven_Seg ssd (
-    //     .clk(clk),
-    //     .num(ss_output),
-    //     .dd(4'b0000),
-    //     .seg(seg),
-    //     .an(an)
-    // );
 
     // Decode concatenated outputs into per-component fields and latch once per VGA frame
     wire [9:0] left0   = comp3210_left[9:0];
@@ -713,53 +724,14 @@ module Top(
         end
     end
 
-
     // Sets timer
-    Time_Countdown timer_inst (
-        .clk(clk),
-        .sw(sw[3:0]),
-        .btnC(btnC),
-        .btnU(btnU),
-        .seg(seg[7:0]),
-        .an(an[3:0])
-    );
-
-
+    // Time_Countdown timer_inst (
+    //     .clk(clk),
+    //     .sw(sw[3:0]),
+    //     .btnC(btnC),
+    //     .btnU(btnU),
+    //     .seg(seg[7:0]),
+    //     .an(an[3:0])
+    // );
 
 endmodule
-
-
-
-
-            // // bottom vertical y
-            // if (frame_y[9:1] >= 122 && frame_y[9:1] <= 131) begin
-            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= green_top_y && frame_y[9:1] <= 120+11) begin
-            //         // Bottom vertical line (cooldown fill rising from bottom)
-            //         frame_pixel <= GREEN;
-            //     end
-            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120+2 && frame_y[9:1] <= green_top_y) begin
-            //         // Bottom vertical line (cooldown fill rising from bottom)
-            //         frame_pixel <= RED;
-            //     end
-            // end
-
-            // // horizontal lines
-            // if (frame_y[9:1] >= 116 && frame_y[9:1] <= 124)
-            //     if (frame_y[9:1] >= green_top_y && frame_y[9:1] <= 124 && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
-            //         frame_pixel <= GREEN;
-
-            //     if (frame_y[9:1] >= 116 && frame_y[9:1] <= green_top_y && frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
-            //         frame_pixel <= RED;
-            // end 
-
-            // // top vertical y
-            // if (frame_y[9:1] >= 109 && frame_y[9:1] <= 118) begin
-            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= green_top_y && frame_y[9:1] <= 120-2) begin
-            //         // Bottom vertical line (cooldown fill rising from bottom)
-            //         frame_pixel <= GREEN;
-            //     end
-            //     if (frame_x[9:1]-14 == 153 && frame_y[9:1] >= 120-11 && frame_y[9:1] <= green_top_y) begin
-            //         // Bottom vertical line (cooldown fill rising from bottom)
-            //         frame_pixel <= RED;
-            //     end
-            // end

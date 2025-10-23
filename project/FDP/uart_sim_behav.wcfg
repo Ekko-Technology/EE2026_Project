@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="uart_sim_behav.wdb" id="1">
+         <top_modules>
+            <top_module name="glbl" />
+            <top_module name="uart_sim" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <zoom_setting>
+      <ZoomStartTime time="225541666fs"></ZoomStartTime>
+      <ZoomEndTime time="284891667fs"></ZoomEndTime>
+      <Cursor1Time time="275000000fs"></Cursor1Time>
+   </zoom_setting>
+   <column_width_setting>
+      <NameColumnWidth column_width="175"></NameColumnWidth>
+      <ValueColumnWidth column_width="134"></ValueColumnWidth>
+   </column_width_setting>
+   <WVObjectSize size="32" />
+   <wave_markers>
+      <marker label="" time="97500000" />
+   </wave_markers>
+   <wvobject type="logic" fp_name="/uart_sim/clk50_1">
+      <obj_property name="ElementShortName">clk50_1</obj_property>
+      <obj_property name="ObjectShortName">clk50_1</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/btnU_1">
+      <obj_property name="ElementShortName">btnU_1</obj_property>
+      <obj_property name="ObjectShortName">btnU_1</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/tx_fifo_payload_1">
+      <obj_property name="ElementShortName">tx_fifo_payload_1[79:0]</obj_property>
+      <obj_property name="ObjectShortName">tx_fifo_payload_1[79:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_sender/uart_transmit/i_Tx_DV">
+      <obj_property name="ElementShortName">i_Tx_DV</obj_property>
+      <obj_property name="ObjectShortName">i_Tx_DV</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_sender/uart_transmit/i_Tx_Byte">
+      <obj_property name="ElementShortName">i_Tx_Byte[7:0]</obj_property>
+      <obj_property name="ObjectShortName">i_Tx_Byte[7:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_sender/uart_transmit/r_SM_Main">
+      <obj_property name="ElementShortName">r_SM_Main[2:0]</obj_property>
+      <obj_property name="ObjectShortName">r_SM_Main[2:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_sender/uart_transmit/o_Tx_Active">
+      <obj_property name="ElementShortName">o_Tx_Active</obj_property>
+      <obj_property name="ObjectShortName">o_Tx_Active</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_sender/uart_transmit/o_Tx_Serial">
+      <obj_property name="ElementShortName">o_Tx_Serial</obj_property>
+      <obj_property name="ObjectShortName">o_Tx_Serial</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_sender/uart_transmit/o_Tx_Done">
+      <obj_property name="ElementShortName">o_Tx_Done</obj_property>
+      <obj_property name="ObjectShortName">o_Tx_Done</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/tx_fifo_wr_en_1">
+      <obj_property name="ElementShortName">tx_fifo_wr_en_1</obj_property>
+      <obj_property name="ObjectShortName">tx_fifo_wr_en_1</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_tx_1">
+      <obj_property name="ElementShortName">uart_tx_1</obj_property>
+      <obj_property name="ObjectShortName">uart_tx_1</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/rx_fifo_payload_1">
+      <obj_property name="ElementShortName">rx_fifo_payload_1[79:0]</obj_property>
+      <obj_property name="ObjectShortName">rx_fifo_payload_1[79:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/rx_fifo_rd_en_1">
+      <obj_property name="ElementShortName">rx_fifo_rd_en_1</obj_property>
+      <obj_property name="ObjectShortName">rx_fifo_rd_en_1</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_rx_1">
+      <obj_property name="ElementShortName">uart_rx_1</obj_property>
+      <obj_property name="ObjectShortName">uart_rx_1</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/clk50">
+      <obj_property name="ElementShortName">clk50</obj_property>
+      <obj_property name="ObjectShortName">clk50</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/btnU">
+      <obj_property name="ElementShortName">btnU</obj_property>
+      <obj_property name="ObjectShortName">btnU</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/tx_fifo_payload">
+      <obj_property name="ElementShortName">tx_fifo_payload[79:0]</obj_property>
+      <obj_property name="ObjectShortName">tx_fifo_payload[79:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/tx_fifo_wr_en">
+      <obj_property name="ElementShortName">tx_fifo_wr_en</obj_property>
+      <obj_property name="ObjectShortName">tx_fifo_wr_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_tx">
+      <obj_property name="ElementShortName">uart_tx</obj_property>
+      <obj_property name="ObjectShortName">uart_tx</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/rx_fifo_payload">
+      <obj_property name="ElementShortName">rx_fifo_payload[79:0]</obj_property>
+      <obj_property name="ObjectShortName">rx_fifo_payload[79:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/rx_fifo_rd_en">
+      <obj_property name="ElementShortName">rx_fifo_rd_en</obj_property>
+      <obj_property name="ObjectShortName">rx_fifo_rd_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_rx">
+      <obj_property name="ElementShortName">uart_rx</obj_property>
+      <obj_property name="ObjectShortName">uart_rx</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_receiver/uart_receive/r_SM_Main">
+      <obj_property name="ElementShortName">r_SM_Main[2:0]</obj_property>
+      <obj_property name="ObjectShortName">r_SM_Main[2:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_receiver/uart_receive/r_Rx_Data_R">
+      <obj_property name="ElementShortName">r_Rx_Data_R</obj_property>
+      <obj_property name="ObjectShortName">r_Rx_Data_R</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_receiver/uart_receive/r_Rx_Data">
+      <obj_property name="ElementShortName">r_Rx_Data</obj_property>
+      <obj_property name="ObjectShortName">r_Rx_Data</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_receiver/uart_receive/r_Bit_Index">
+      <obj_property name="ElementShortName">r_Bit_Index[2:0]</obj_property>
+      <obj_property name="ObjectShortName">r_Bit_Index[2:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_receiver/uart_receive/r_Rx_Byte">
+      <obj_property name="ElementShortName">r_Rx_Byte[7:0]</obj_property>
+      <obj_property name="ObjectShortName">r_Rx_Byte[7:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_receiver/uart_receive/r_Rx_DV">
+      <obj_property name="ElementShortName">r_Rx_DV</obj_property>
+      <obj_property name="ObjectShortName">r_Rx_DV</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_receiver/uart_rx_valid">
+      <obj_property name="ElementShortName">uart_rx_valid</obj_property>
+      <obj_property name="ObjectShortName">uart_rx_valid</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_receiver/rx_idx">
+      <obj_property name="ElementShortName">rx_idx[3:0]</obj_property>
+      <obj_property name="ObjectShortName">rx_idx[3:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/uart_sim/uart_receiver/rx_buf">
+      <obj_property name="ElementShortName">rx_buf[79:0]</obj_property>
+      <obj_property name="ObjectShortName">rx_buf[79:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/uart_sim/uart_receiver/rx_done_pend">
+      <obj_property name="ElementShortName">rx_done_pend</obj_property>
+      <obj_property name="ObjectShortName">rx_done_pend</obj_property>
+   </wvobject>
+</wave_config>
