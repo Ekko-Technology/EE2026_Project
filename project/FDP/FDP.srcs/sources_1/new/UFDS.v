@@ -247,6 +247,13 @@ always @(posedge clk) begin
             slot0 <= 0; slot1 <= 0; slot2 <= 0; slot3 <= 0;
             slot0_area <= 0; slot1_area <= 0; slot2_area <= 0; slot3_area <= 0;
             comp_count <= 0;
+            comp3210_left  <= 0;
+            comp3210_right  <= 0;
+            comp3210_top <= 0;
+            comp3210_bottom <= 0;
+            comp3210_cx <= 0;
+            comp3210_cy <= 0;
+            comp3210_area <= 0;
 
             state <= S_READY;
 
