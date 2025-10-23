@@ -153,31 +153,9 @@ module mouse_movement(
     //         pulse_widths[i] = 100_000 + (i * 100_000 / 180);
     //     end
     // end
-    // Map raw mouse coordinate directly to pulse width (no runtime division):
-    // raw in 0..IN_MAX maps to 100_000..200_000
-    // For X we keep previous inversion (0->max pulse, IN_MAX->min pulse)
-    // Now using full xpos/ypos width (14 bits). Map 0..16383 -> 100_000..200_000
-    localparam integer IN_MAX = 14'd16383; // raw input max (14-bit)
-    localparam integer FP_N  = 16; // fractional bits for fixed-point reciprocal
-    // FP_K = round(100000 * 2^FP_N / IN_MAX)
-    // 100000 * 65536 / 16383 ≈ 400024.415 -> use 400024
-    localparam integer FP_K  = 400024; // precomputed constant for 100000/16383 * 2^16
-
-    // clamp raw inputs to IN_MAX (now 14 bits)
-    wire [13:0] raw_x = (xpos > IN_MAX) ? IN_MAX : xpos[13:0];
-    wire [13:0] raw_y = (ypos > IN_MAX) ? IN_MAX : ypos[13:0];
-
-    // reverse X like previous code: use IN_MAX - raw_x
-    wire [13:0] raw_x_rev = IN_MAX - raw_x;
-
-    // multiply then shift to divide by IN_MAX (using FP_K)
-    // widen multiply to avoid overflow: raw(14) * FP_K(~19) => ~33 bits; use 40 bits for headroom
-    wire [39:0] mult_x = raw_x_rev * FP_K;
-    wire [39:0] mult_y = raw_y * FP_K;
-
-    // add rounding and shift down by FP_N fractional bits
-    wire [20:0] pulse_width_x = 100_000 + ((mult_x + (1 << (FP_N-1))) >> FP_N);
-    wire [20:0] pulse_width_y = 100_000 + ((mult_y + (1 << (FP_N-1))) >> FP_N);
+    // Convert servo angle (0–180 degrees) to pulse width (1 ms – 2 ms)
+    wire [20:0] pulse_width_x = 100_000 + ((180 - servo_x_angle) * 100_000 / 180);
+    wire [20:0] pulse_width_y = 100_000 + (servo_y_angle * 100_000 / 180);
 
     always @(posedge clk) begin
         // Reset counter every 20 ms as most servo motors works with such
