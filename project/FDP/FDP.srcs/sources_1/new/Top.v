@@ -467,7 +467,8 @@ module Top(
     wire [13:0] x_coord;
     wire [13:0] y_coord;
 
-    // wire [7:0] cooldown_progress;
+    // Cooldown progress from mouse controller
+    wire [7:0] cooldown_progress;
 
     // mouse controller module
     mouse_movement mouse_ctrl (
@@ -616,100 +617,118 @@ module Top(
     reg [8:0] top2_l, bottom2_l, cy2_l;
     reg [8:0] top3_l, bottom3_l, cy3_l;
 
+    // Randomised canvas module instance (mosaic + shapes). Used with sw[4] ON.
+    wire [11:0] canvas_pixel;
+    Randomised_Canvas canvas_inst (
+        .clk(clk25),
+        .reset(vga_reset),
+        .btnC(btnC),
+        .frame_x(frame_x),
+        .frame_y(frame_y),
+        .in_roi(in_roi),
+        .active_area(active_area),
+        .pixel_out(canvas_pixel)
+    );
+
     always @(posedge clk25) begin
-        if (frame_addr == 73439) begin
-            // snapshot UFDS results once per VGA frame
-            left0_l <= left0; right0_l <= right0; cx0_l <= cx0; top0_l <= top0; bottom0_l <= bottom0; cy0_l <= cy0;
-            left1_l <= left1; right1_l <= right1; cx1_l <= cx1; top1_l <= top1; bottom1_l <= bottom1; cy1_l <= cy1;
-            left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
-            left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
+        // Output random canvas of colours by separate FPGA using sw[4]
+        if (sw[4]) begin
+            frame_pixel <= canvas_pixel;
         end else begin
-            // --- Crosshair drawing with cooldown-based bottom fill ---
-            // === Bottom vertical arm ===
-            if (frame_x[9:1]-14 == 153 &&
-                frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
+            if (frame_addr == 73439) begin
+                // snapshot UFDS results once per VGA frame
+                left0_l <= left0; right0_l <= right0; cx0_l <= cx0; top0_l <= top0; bottom0_l <= bottom0; cy0_l <= cy0;
+                left1_l <= left1; right1_l <= right1; cx1_l <= cx1; top1_l <= top1; bottom1_l <= bottom1; cy1_l <= cy1;
+                left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
+                left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
+            end else begin
+                // --- Crosshair drawing with cooldown-based bottom fill ---
+                // === Bottom vertical arm ===
+                if (frame_x[9:1]-14 == 153 &&
+                    frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
 
-                // Green portion rises upward from bottom
-                if (frame_y[9:1] >= green_top_y)
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
+                    // Green portion rises upward from bottom
+                    if (frame_y[9:1] >= green_top_y)
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
 
-            // === Top vertical arm ===
-            else if (frame_x[9:1]-14 == 153 &&
-                    frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
+                // === Top vertical arm ===
+                else if (frame_x[9:1]-14 == 153 &&
+                        frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
 
-                // Mirror the same cooldown progress upward
-                if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
+                    // Mirror the same cooldown progress upward
+                    if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
 
-            // === Left horizontal arm ===
-            else if (frame_y[9:1] == 120 &&
-                    frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
+                // === Left horizontal arm ===
+                else if (frame_y[9:1] == 120 &&
+                        frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
 
-                // Turn green once cooldown crosses midpoint
-                if (fill_height >= CROSSHAIR_HEIGHT / 2)
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
+                    // Turn green once cooldown crosses midpoint
+                    if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
 
-            // === Right horizontal arm ===
-            else if (frame_y[9:1] == 120 &&
-                    frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
+                // === Right horizontal arm ===
+                else if (frame_y[9:1] == 120 &&
+                        frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
 
-                if (fill_height >= CROSSHAIR_HEIGHT / 2)
-                    frame_pixel <= GREEN;
-                else
-                    frame_pixel <= RED;
-            end
-            else if (in_roi && (
-                // Comp 0
-                (
-                    (frame_x[9:1]-14 == left0_l  && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
-                    (frame_x[9:1]-14 == right0_l && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
-                    (frame_y[9:1] == top0_l      && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
-                    (frame_y[9:1] == bottom0_l   && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
-                    (frame_x[9:1]-14 == cx0_l    && frame_y[9:1] >= cy0_l-2 && frame_y[9:1] <= cy0_l+2) ||
-                    (frame_y[9:1] == cy0_l       && frame_x[9:1]-14 >= cx0_l-2 && frame_x[9:1]-14 <= cx0_l+2)
-                ) ||
-                // Comp 1
-                (
-                    (frame_x[9:1]-14 == left1_l  && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
-                    (frame_x[9:1]-14 == right1_l && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
-                    (frame_y[9:1] == top1_l      && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
-                    (frame_y[9:1] == bottom1_l   && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
-                    (frame_x[9:1]-14 == cx1_l    && frame_y[9:1] >= cy1_l-2 && frame_y[9:1] <= cy1_l+2) ||
-                    (frame_y[9:1] == cy1_l       && frame_x[9:1]-14 >= cx1_l-2 && frame_x[9:1]-14 <= cx1_l+2)
-                ) ||
-                // Comp 2
-                (
-                    (frame_x[9:1]-14 == left2_l  && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
-                    (frame_x[9:1]-14 == right2_l && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
-                    (frame_y[9:1] == top2_l      && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
-                    (frame_y[9:1] == bottom2_l   && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
-                    (frame_x[9:1]-14 == cx2_l    && frame_y[9:1] >= cy2_l-2 && frame_y[9:1] <= cy2_l+2) ||
-                    (frame_y[9:1] == cy2_l       && frame_x[9:1]-14 >= cx2_l-2 && frame_x[9:1]-14 <= cx2_l+2)
-                ) ||
-                // Comp 3
-                (
-                    (frame_x[9:1]-14 == left3_l  && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
-                    (frame_x[9:1]-14 == right3_l && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
-                    (frame_y[9:1] == top3_l      && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
-                    (frame_y[9:1] == bottom3_l   && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
-                    (frame_x[9:1]-14 == cx3_l    && frame_y[9:1] >= cy3_l-2 && frame_y[9:1] <= cy3_l+2) ||
-                    (frame_y[9:1] == cy3_l       && frame_x[9:1]-14 >= cx3_l-2 && frame_x[9:1]-14 <= cx3_l+2)
-                )
-            )) begin
-                frame_pixel <= 12'h00F;
-            end
-            else begin
-                if (sw[0]) frame_pixel <= (bitmap_pixel ? 12'hFFF : 12'h000);
-                else frame_pixel <= image_pixel;
+                    if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
+                else if (in_roi && (
+                    // Comp 0
+                    (
+                        (frame_x[9:1]-14 == left0_l  && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
+                        (frame_x[9:1]-14 == right0_l && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
+                        (frame_y[9:1] == top0_l      && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
+                        (frame_y[9:1] == bottom0_l   && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
+                        (frame_x[9:1]-14 == cx0_l    && frame_y[9:1] >= cy0_l-2 && frame_y[9:1] <= cy0_l+2) ||
+                        (frame_y[9:1] == cy0_l       && frame_x[9:1]-14 >= cx0_l-2 && frame_x[9:1]-14 <= cx0_l+2)
+                    ) ||
+                    // Comp 1
+                    (
+                        (frame_x[9:1]-14 == left1_l  && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
+                        (frame_x[9:1]-14 == right1_l && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
+                        (frame_y[9:1] == top1_l      && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
+                        (frame_y[9:1] == bottom1_l   && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
+                        (frame_x[9:1]-14 == cx1_l    && frame_y[9:1] >= cy1_l-2 && frame_y[9:1] <= cy1_l+2) ||
+                        (frame_y[9:1] == cy1_l       && frame_x[9:1]-14 >= cx1_l-2 && frame_x[9:1]-14 <= cx1_l+2)
+                    ) ||
+                    // Comp 2
+                    (
+                        (frame_x[9:1]-14 == left2_l  && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
+                        (frame_x[9:1]-14 == right2_l && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
+                        (frame_y[9:1] == top2_l      && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
+                        (frame_y[9:1] == bottom2_l   && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
+                        (frame_x[9:1]-14 == cx2_l    && frame_y[9:1] >= cy2_l-2 && frame_y[9:1] <= cy2_l+2) ||
+                        (frame_y[9:1] == cy2_l       && frame_x[9:1]-14 >= cx2_l-2 && frame_x[9:1]-14 <= cx2_l+2)
+                    ) ||
+                    // Comp 3
+                    (
+                        (frame_x[9:1]-14 == left3_l  && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
+                        (frame_x[9:1]-14 == right3_l && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
+                        (frame_y[9:1] == top3_l      && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
+                        (frame_y[9:1] == bottom3_l   && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
+                        (frame_x[9:1]-14 == cx3_l    && frame_y[9:1] >= cy3_l-2 && frame_y[9:1] <= cy3_l+2) ||
+                        (frame_y[9:1] == cy3_l       && frame_x[9:1]-14 >= cx3_l-2 && frame_x[9:1]-14 <= cx3_l+2)
+                    )
+                )) begin
+                    frame_pixel <= 12'h00F;
+                end
+                else begin
+                    if (sw[0]) frame_pixel <= (bitmap_pixel ? 12'hFFF : 12'h000);
+                    else frame_pixel <= image_pixel;
+                end
             end
         end
     end
@@ -723,5 +742,6 @@ module Top(
     //     .seg(seg[7:0]),
     //     .an(an[3:0])
     // );
+
 
 endmodule
