@@ -463,9 +463,12 @@ module Top(
     wire servo_x_pwm;
     wire servo_y_pwm;
 
-    // Current VGA pixel coordinates
-    wire [13:0] x_coord = {5'b0, frame_x[9:1]};  // Scale from VGA coordinates
-    wire [13:0] y_coord = {5'b0, frame_y[9:1]};  // Scale from VGA coordinates
+    // temporary holder for screen pixel coordinates (to be replaced)
+    wire [13:0] x_coord;
+    wire [13:0] y_coord;
+
+    // Cooldown progress from mouse controller
+    wire [7:0] cooldown_progress;
 
     // mouse controller module
     mouse_movement mouse_ctrl (
@@ -616,11 +619,11 @@ module Top(
 
 
     // --- Detect mouse click inside box ---
-    wire inside_play_box = (mouse_x_trimmed >= BOX_X0 && mouse_x_trimmed < BOX_X0 + WIDTH0 &&
-                       mouse_y_trimmed >= BOX_Y0 && mouse_y_trimmed < BOX_Y0 + HEIGHT0);
+    wire inside_play_box = (mouse_x >= BOX_X0 && mouse_x < BOX_X0 + WIDTH0 &&
+                       mouse_y >= BOX_Y0 && mouse_y < BOX_Y0 + HEIGHT0);
 
-    wire inside_exit_box = (mouse_x_trimmed >= BOX_X1 && mouse_x_trimmed < BOX_X1 + WIDTH1 &&
-                       mouse_y_trimmed >= BOX_Y1 && mouse_y_trimmed < BOX_Y1 + HEIGHT1);
+    wire inside_exit_box = (mouse_x >= BOX_X1 && mouse_x < BOX_X1 + WIDTH1 &&
+                       mouse_y >= BOX_Y1 && mouse_y < BOX_Y1 + HEIGHT1);
 
 
     reg MENU_MODE = 1;
@@ -659,13 +662,13 @@ module Top(
     wire within_cursor; 
     wire [15:0] cursor_color;
 
-    assign within_cursor = ((frame_x[9:1]-14 == mouse_x_trimmed) || ((frame_x[9:1]-14 - mouse_x_trimmed) == 1) || ((mouse_x_trimmed - frame_x[9:1]-14) == 1)) && ((frame_y[9:1] == mouse_y_trimmed) || ((frame_y[9:1] - mouse_y_trimmed) == 1) || ((mouse_y_trimmed - frame_y[9:1]) == 1));
+    assign within_cursor = ((frame_x[9:1]-14 == mouse_x) || ((frame_x[9:1]-14 - mouse_x) == 1) || ((mouse_x - frame_x[9:1]-14) == 1)) && ((frame_y[9:1] == mouse_y) || ((frame_y[9:1] - mouse_y) == 1) || ((mouse_y - frame_y[9:1]) == 1));
 
     assign cursor_color = within_cursor ? 12'hFFF : 0;
 
 
     always @(posedge clk25) begin
-
+        
         if (MENU_MODE) begin
             if(within_cursor) begin
                 frame_pixel <= cursor_color;
@@ -691,93 +694,97 @@ module Top(
             //     if (inside_exit_box && left_click)
             //         MENU_MODE <= 1;
             // end
+        end else if (sw[4]) begin
+            frame_pixel <= canvas_pixel;
         end else begin
-                if (frame_addr == 73439) begin
+            if (frame_addr == 73439) begin
                 // snapshot UFDS results once per VGA frame
-                    left0_l <= left0; right0_l <= right0; cx0_l <= cx0; top0_l <= top0; bottom0_l <= bottom0; cy0_l <= cy0;
-                    left1_l <= left1; right1_l <= right1; cx1_l <= cx1; top1_l <= top1; bottom1_l <= bottom1; cy1_l <= cy1;
-                    left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
-                    left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
-                end else begin
-                    // === Bottom vertical arm ===
-                    if (frame_x[9:1]-14 == 153 &&
-                        frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
+                left0_l <= left0; right0_l <= right0; cx0_l <= cx0; top0_l <= top0; bottom0_l <= bottom0; cy0_l <= cy0;
+                left1_l <= left1; right1_l <= right1; cx1_l <= cx1; top1_l <= top1; bottom1_l <= bottom1; cy1_l <= cy1;
+                left2_l <= left2; right2_l <= right2; cx2_l <= cx2; top2_l <= top2; bottom2_l <= bottom2; cy2_l <= cy2;
+                left3_l <= left3; right3_l <= right3; cx3_l <= cx3; top3_l <= top3; bottom3_l <= bottom3; cy3_l <= cy3;
+            end else begin
+                // --- Crosshair drawing with cooldown-based bottom fill ---
+                // === Bottom vertical arm ===
+                if (frame_x[9:1]-14 == 153 &&
+                    frame_y[9:1] >= 120+2 && frame_y[9:1] <= 120+11) begin
 
-                        // Green portion rises upward from bottom
-                        if (frame_y[9:1] >= green_top_y)
-                            frame_pixel <= GREEN;
-                        else
-                            frame_pixel <= RED;
-                    end
-                    // === Top vertical arm ===
-                    else if (frame_x[9:1]-14 == 153 &&
-                            frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
+                    // Green portion rises upward from bottom
+                    if (frame_y[9:1] >= green_top_y)
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
 
-                        // Mirror the same cooldown progress upward
-                        if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
-                            frame_pixel <= GREEN;
-                        else
-                            frame_pixel <= RED;
-                    end
+                // === Top vertical arm ===
+                else if (frame_x[9:1]-14 == 153 &&
+                        frame_y[9:1] >= 120-11 && frame_y[9:1] <= 120-2) begin
 
-                    // === Left horizontal arm ===
-                    else if (frame_y[9:1] == 120 &&
-                            frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
+                    // Mirror the same cooldown progress upward
+                    if (frame_y[9:1] <= (120 - CROSSHAIR_HEIGHT + fill_height))
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
 
-                        // Turn green once cooldown crosses midpoint
-                        if (fill_height >= CROSSHAIR_HEIGHT / 2)
-                            frame_pixel <= GREEN;
-                        else
-                            frame_pixel <= RED;
-                    end
+                // === Left horizontal arm ===
+                else if (frame_y[9:1] == 120 &&
+                        frame_x[9:1]-14 >= 153-11 && frame_x[9:1]-14 <= 153-2) begin
 
-                    // === Right horizontal arm ===
-                    else if (frame_y[9:1] == 120 &&
-                            frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
+                    // Turn green once cooldown crosses midpoint
+                    if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
 
-                        if (fill_height >= CROSSHAIR_HEIGHT / 2)
-                            frame_pixel <= GREEN;
-                        else
-                            frame_pixel <= RED;
-                    end
-                    else if (in_roi && (
-                        // Comp 0
-                        (
-                            (frame_x[9:1]-14 == left0_l  && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
-                            (frame_x[9:1]-14 == right0_l && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
-                            (frame_y[9:1] == top0_l      && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
-                            (frame_y[9:1] == bottom0_l   && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
-                            (frame_x[9:1]-14 == cx0_l    && frame_y[9:1] >= cy0_l-2 && frame_y[9:1] <= cy0_l+2) ||
-                            (frame_y[9:1] == cy0_l       && frame_x[9:1]-14 >= cx0_l-2 && frame_x[9:1]-14 <= cx0_l+2)
-                        ) ||
-                        // Comp 1
-                        (
-                            (frame_x[9:1]-14 == left1_l  && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
-                            (frame_x[9:1]-14 == right1_l && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
-                            (frame_y[9:1] == top1_l      && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
-                            (frame_y[9:1] == bottom1_l   && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
-                            (frame_x[9:1]-14 == cx1_l    && frame_y[9:1] >= cy1_l-2 && frame_y[9:1] <= cy1_l+2) ||
-                            (frame_y[9:1] == cy1_l       && frame_x[9:1]-14 >= cx1_l-2 && frame_x[9:1]-14 <= cx1_l+2)
-                        ) ||
-                        // Comp 2
-                        (
-                            (frame_x[9:1]-14 == left2_l  && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
-                            (frame_x[9:1]-14 == right2_l && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
-                            (frame_y[9:1] == top2_l      && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
-                            (frame_y[9:1] == bottom2_l   && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
-                            (frame_x[9:1]-14 == cx2_l    && frame_y[9:1] >= cy2_l-2 && frame_y[9:1] <= cy2_l+2) ||
-                            (frame_y[9:1] == cy2_l       && frame_x[9:1]-14 >= cx2_l-2 && frame_x[9:1]-14 <= cx2_l+2)
-                        ) ||
-                        // Comp 3
-                        (
-                            (frame_x[9:1]-14 == left3_l  && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
-                            (frame_x[9:1]-14 == right3_l && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
-                            (frame_y[9:1] == top3_l      && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
-                            (frame_y[9:1] == bottom3_l   && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
-                            (frame_x[9:1]-14 == cx3_l    && frame_y[9:1] >= cy3_l-2 && frame_y[9:1] <= cy3_l+2) ||
-                            (frame_y[9:1] == cy3_l       && frame_x[9:1]-14 >= cx3_l-2 && frame_x[9:1]-14 <= cx3_l+2)
-                        )
-                    ))  begin
+                // === Right horizontal arm ===
+                else if (frame_y[9:1] == 120 &&
+                        frame_x[9:1]-14 >= 153+2 && frame_x[9:1]-14 <= 153+11) begin
+
+                    if (fill_height >= CROSSHAIR_HEIGHT / 2)
+                        frame_pixel <= GREEN;
+                    else
+                        frame_pixel <= RED;
+                end
+                else if (in_roi && (
+                    // Comp 0
+                    (
+                        (frame_x[9:1]-14 == left0_l  && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
+                        (frame_x[9:1]-14 == right0_l && frame_y[9:1] >= top0_l    && frame_y[9:1] <= bottom0_l) ||
+                        (frame_y[9:1] == top0_l      && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
+                        (frame_y[9:1] == bottom0_l   && frame_x[9:1]-14 >= left0_l  && frame_x[9:1]-14 <= right0_l) ||
+                        (frame_x[9:1]-14 == cx0_l    && frame_y[9:1] >= cy0_l-2 && frame_y[9:1] <= cy0_l+2) ||
+                        (frame_y[9:1] == cy0_l       && frame_x[9:1]-14 >= cx0_l-2 && frame_x[9:1]-14 <= cx0_l+2)
+                    ) ||
+                    // Comp 1
+                    (
+                        (frame_x[9:1]-14 == left1_l  && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
+                        (frame_x[9:1]-14 == right1_l && frame_y[9:1] >= top1_l    && frame_y[9:1] <= bottom1_l) ||
+                        (frame_y[9:1] == top1_l      && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
+                        (frame_y[9:1] == bottom1_l   && frame_x[9:1]-14 >= left1_l  && frame_x[9:1]-14 <= right1_l) ||
+                        (frame_x[9:1]-14 == cx1_l    && frame_y[9:1] >= cy1_l-2 && frame_y[9:1] <= cy1_l+2) ||
+                        (frame_y[9:1] == cy1_l       && frame_x[9:1]-14 >= cx1_l-2 && frame_x[9:1]-14 <= cx1_l+2)
+                    ) ||
+                    // Comp 2
+                    (
+                        (frame_x[9:1]-14 == left2_l  && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
+                        (frame_x[9:1]-14 == right2_l && frame_y[9:1] >= top2_l    && frame_y[9:1] <= bottom2_l) ||
+                        (frame_y[9:1] == top2_l      && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
+                        (frame_y[9:1] == bottom2_l   && frame_x[9:1]-14 >= left2_l  && frame_x[9:1]-14 <= right2_l) ||
+                        (frame_x[9:1]-14 == cx2_l    && frame_y[9:1] >= cy2_l-2 && frame_y[9:1] <= cy2_l+2) ||
+                        (frame_y[9:1] == cy2_l       && frame_x[9:1]-14 >= cx2_l-2 && frame_x[9:1]-14 <= cx2_l+2)
+                    ) ||
+                    // Comp 3
+                    (
+                        (frame_x[9:1]-14 == left3_l  && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
+                        (frame_x[9:1]-14 == right3_l && frame_y[9:1] >= top3_l    && frame_y[9:1] <= bottom3_l) ||
+                        (frame_y[9:1] == top3_l      && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
+                        (frame_y[9:1] == bottom3_l   && frame_x[9:1]-14 >= left3_l  && frame_x[9:1]-14 <= right3_l) ||
+                        (frame_x[9:1]-14 == cx3_l    && frame_y[9:1] >= cy3_l-2 && frame_y[9:1] <= cy3_l+2) ||
+                        (frame_y[9:1] == cy3_l       && frame_x[9:1]-14 >= cx3_l-2 && frame_x[9:1]-14 <= cx3_l+2)
+                    )
+                )) begin
                     frame_pixel <= 12'h00F;
                 end
                 else begin
@@ -786,51 +793,22 @@ module Top(
                 end
             end
         end
-    end
+    end 
 
 
+    // Randomised canvas module instance (mosaic + shapes). Used with sw[4] ON.
+    wire [11:0] canvas_pixel;
+    Randomised_Canvas canvas_inst (
+        .clk(clk25),
+        .reset(vga_reset),
+        .btnC(btnC),
+        .frame_x(frame_x),
+        .frame_y(frame_y),
+        .in_roi(in_roi),
+        .active_area(active_area),
+        .pixel_out(canvas_pixel)
+    );
 
-
-    // ----------- CURSOR CONTROL ----------- //
-    // localparam CURSOR_SIZE = 4;
-    // localparam CURSOR_COLOR = 12'hF0F; // purple
-
-    // // Scale mouse coordinates (0–8191 → 0–305 / 0–239)
-    // wire [9:0] mouse_x_trimmed = (mouse_x * 10'd306) >> 13;
-    // wire [9:0] mouse_y_trimmed = (mouse_y * 10'd240) >> 13;
-
-    // // Optional hold registers to "freeze" cursor when in game mode
-    // reg [9:0] cursor_x = 10'd0;
-    // reg [9:0] cursor_y = 10'd0;
-
-    // always @(posedge clk) begin
-    //     if (MENU_MODE) begin
-    //         cursor_x <= mouse_x_trimmed;
-    //         cursor_y <= mouse_y_trimmed;
-    //     end
-    // end
-
-    // // Signal when VGA pixel is within cursor area
-    // wire cursor_active = MENU_MODE &&
-    //                     (frame_x >= cursor_x - CURSOR_SIZE &&
-    //                     frame_x <  cursor_x + CURSOR_SIZE &&
-    //                     frame_y >= cursor_y - CURSOR_SIZE &&
-    //                     frame_y <  cursor_y + CURSOR_SIZE);
-
-    // begin
-    //     frame_pixel <= 12'h00F;
-    // end if (MENU_MODE &&
-    //     frame_x >= mouse_x_trimmed - CURSOR_SIZE &&
-    //     frame_x <  mouse_x_trimmed + CURSOR_SIZE &&
-    //     frame_y >= mouse_y_trimmed - CURSOR_SIZE &&
-    //     frame_y < mouse_y_trimmed + CURSOR_SIZE)
-    // begin
-    //     frame_pixel <= CURSOR_COLOR;
-    // end
-    // else begin
-    //     if (sw[0]) frame_pixel <= (bitmap_pixel ? 12'hFFF : 12'h000);
-    //     else frame_pixel <= image_pixel;
-    // end   
 
 
 
@@ -844,23 +822,5 @@ module Top(
     //     .an(an[3:0])
     // );
 
-
-    
-    // Instantiate your menu_box module
-    // menu_box left_box_menu (
-    //     .clk(clk),
-    //     .frame_x(frame_x),
-    //     .frame_y(frame_y),
-    //     .box_topleft_X(BOX_X0),
-    //     .box_topleft_Y(BOX_Y0),
-    //     .width(WIDTH0),
-    //     .height(HEIGHT0),
-    //     .thickness(THICKNESS0),
-    //     .left_click(left_click & MENU_MODE),   // only active in menu mode
-    //     .mouse_x(mouse_x_trimmed),
-    //     .mouse_y(mouse_y_trimmed),
-    //     .box_pixel(box_color),
-    //     .state(box_state)
-    // );
 
 endmodule
